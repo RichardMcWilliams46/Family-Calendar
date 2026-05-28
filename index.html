@@ -2,20 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/Family-Calendar/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sunflower Calendar</title>
 
     <!-- PWA Meta Tags -->
     <meta name="description" content="A beautiful shared calendar for couples" />
     <meta name="theme-color" content="#F59E0B" />
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/Family-Calendar/manifest.json" />
 
     <!-- Apple iOS Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Calendar" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/Family-Calendar/icon-192.png" />
 
     <!-- Social Media Meta Tags -->
     <meta property="og:title" content="Sunflower Calendar" />
@@ -30,7 +30,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
+          navigator.serviceWorker.register('/Family-Calendar/sw.js')
             .then(registration => console.log('SW registered'))
             .catch(err => console.log('SW registration failed'));
         });
