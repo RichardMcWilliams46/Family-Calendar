@@ -1,9 +1,7 @@
 const CACHE_NAME = 'sunflower-calendar-v1';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/src/main.tsx',
-  '/src/index.css'
+  '/Family-Calendar/',
+  '/Family-Calendar/index.html'
 ];
 
 self.addEventListener('install', (event) => {
