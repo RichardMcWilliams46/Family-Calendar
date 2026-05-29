@@ -259,7 +259,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="p-6 sm:p-8 space-y-5 sm:space-y-6 overflow-y-auto flex-1 overscroll-contain">
+          <div className="p-6 sm:p-8 space-y-5 sm:space-y-6 overflow-y-auto overflow-x-hidden flex-1 overscroll-contain">
           <div>
             <label htmlFor="title" className="block text-sm font-semibold text-amber-900 mb-2">
               Event Title
@@ -335,7 +335,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+          <div className="grid grid-cols-1 gap-4">
             <div>
               <label htmlFor="startDate" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-amber-600 flex-shrink-0" />
@@ -374,7 +374,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+          <div className="grid grid-cols-1 gap-4">
             <div>
               <label htmlFor="endDate" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-amber-700 flex-shrink-0" />
