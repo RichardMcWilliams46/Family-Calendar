@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase, CalendarEvent, EventTypeColor } from '../lib/supabase';
-import { ChevronLeft, ChevronRight, Plus, LogOut, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, LogOut, Settings, Menu, X } from 'lucide-react';
 import EventModal from './EventModal';
 import EventList from './EventList';
 import ColorSettings from './ColorSettings';
@@ -18,9 +18,12 @@ export default function Calendar() {
   const [eventTypeColors, setEventTypeColors] = useState<EventTypeColor[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isBurgerOpen, setIsBurgerOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('list');
+  const [filterType, setFilterType] = useState<'all' | 'events-holidays'>('events-holidays');
+  const burgerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadEvents();
@@ -30,9 +33,7 @@ export default function Calendar() {
       .channel('calendar_events_changes')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'calendar_events' },
-        () => {
-          loadEvents();
-        }
+        () => { loadEvents(); }
       )
       .subscribe();
 
@@ -53,15 +54,22 @@ export default function Calendar() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (burgerRef.current && !burgerRef.current.contains(e.target as Node)) {
+        setIsBurgerOpen(false);
+      }
+    };
+    if (isBurgerOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isBurgerOpen]);
+
   const loadEvents = async () => {
     const { data, error } = await supabase
       .from('calendar_events')
       .select('*')
       .order('start_date', { ascending: true });
-
-    if (!error && data) {
-      setEvents(data);
-    }
+    if (!error && data) setEvents(data);
   };
 
   const loadEventTypeColors = async () => {
@@ -69,13 +77,11 @@ export default function Calendar() {
       .from('event_type_colors')
       .select('*')
       .order('event_type', { ascending: true });
-
-    if (!error && data) {
-      setEventTypeColors(data);
-    }
+    if (!error && data) setEventTypeColors(data);
   };
 
   const handleSignOut = async () => {
+    setIsBurgerOpen(false);
     await supabase.auth.signOut();
   };
 
@@ -86,49 +92,35 @@ export default function Calendar() {
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
     const startingDayOfWeek = firstDay.getDay();
-
-    // Adjust for Monday as first day (0 = Sunday -> 6, 1 = Monday -> 0)
     const adjustedStartDay = startingDayOfWeek === 0 ? 6 : startingDayOfWeek - 1;
 
     const days: (Date | null)[] = [];
-
-    for (let i = 0; i < adjustedStartDay; i++) {
-      days.push(null);
-    }
-
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(new Date(year, month, i));
-    }
-
+    for (let i = 0; i < adjustedStartDay; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
     return days;
   };
 
   const getEventsForDate = (date: Date | null) => {
     if (!date) return [];
-
     const year = date.getFullYear();
     const month = date.getMonth();
     const day = date.getDate();
     const localDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
     return events.filter(event => {
-      const eventStartDate = new Date(event.start_date);
-      const eventEndDate = new Date(event.end_date);
-
-      const eventStartStr = `${eventStartDate.getFullYear()}-${String(eventStartDate.getMonth() + 1).padStart(2, '0')}-${String(eventStartDate.getDate()).padStart(2, '0')}`;
-      const eventEndStr = `${eventEndDate.getFullYear()}-${String(eventEndDate.getMonth() + 1).padStart(2, '0')}-${String(eventEndDate.getDate()).padStart(2, '0')}`;
-
-      return localDateStr >= eventStartStr && localDateStr <= eventEndStr;
+      const s = new Date(event.start_date);
+      const e = new Date(event.end_date);
+      const startStr = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, '0')}-${String(s.getDate()).padStart(2, '0')}`;
+      const endStr = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`;
+      return localDateStr >= startStr && localDateStr <= endStr;
     });
   };
 
-  const handlePreviousMonth = () => {
+  const handlePreviousMonth = () =>
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
-  };
 
-  const handleNextMonth = () => {
+  const handleNextMonth = () =>
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
-  };
 
   const handleDateClick = (date: Date | null) => {
     if (date) {
@@ -147,8 +139,7 @@ export default function Calendar() {
 
   const isToday = (date: Date | null) => {
     if (!date) return false;
-    const today = new Date();
-    return date.toDateString() === today.toDateString();
+    return date.toDateString() === new Date().toDateString();
   };
 
   const days = getDaysInMonth(currentDate);
@@ -170,16 +161,40 @@ export default function Calendar() {
           <div className="px-6 py-6 border-b border-amber-200/50 bg-gradient-to-r from-amber-100/40 via-yellow-100/30 to-amber-100/40">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <Sunflower size={40} className="text-amber-500" />
+                <Sunflower size={40} day={new Date().getDate()} />
                 <h1 className="text-2xl font-semibold text-amber-900">Our Calendar</h1>
               </div>
-              <button
-                onClick={handleSignOut}
-                className="flex items-center gap-2 px-4 py-2 text-amber-800 hover:bg-amber-100/50 rounded-lg transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="hidden sm:inline">Sign Out</span>
-              </button>
+
+              {/* Burger menu */}
+              <div className="relative" ref={burgerRef}>
+                <button
+                  onClick={() => setIsBurgerOpen(prev => !prev)}
+                  className="p-2 text-amber-800 hover:bg-amber-100/60 rounded-lg transition-colors"
+                  aria-label="Menu"
+                >
+                  {isBurgerOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                </button>
+
+                {isBurgerOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-amber-200/60 overflow-hidden z-50">
+                    <button
+                      onClick={() => { setIsSettingsOpen(true); setIsBurgerOpen(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-amber-900 hover:bg-amber-50 transition-colors"
+                    >
+                      <Settings className="w-4 h-4 text-amber-600" />
+                      Settings
+                    </button>
+                    <div className="border-t border-amber-100" />
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-amber-900 hover:bg-amber-50 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4 text-amber-600" />
+                      Log Out
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex flex-col gap-4">
@@ -220,13 +235,6 @@ export default function Calendar() {
                     Calendar
                   </button>
                 </div>
-                <button
-                  onClick={() => setIsSettingsOpen(true)}
-                  className="p-2 text-amber-700 hover:bg-amber-100/50 rounded-lg transition-colors"
-                  title="Color Settings"
-                >
-                  <Settings className="w-5 h-5" />
-                </button>
                 <button
                   onClick={() => {
                     setSelectedDate(new Date());
@@ -307,6 +315,9 @@ export default function Calendar() {
           ) : (
             <EventList
               events={events}
+              currentDate={currentDate}
+              filterType={filterType}
+              onFilterChange={setFilterType}
               onEventClick={(event) => {
                 setSelectedEvent(event);
                 setSelectedDate(null);

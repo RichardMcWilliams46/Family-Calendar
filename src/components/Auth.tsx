@@ -75,6 +75,7 @@ export default function Auth() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="email"
               className="w-full px-4 py-3.5 bg-amber-50/50 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 placeholder:text-amber-300"
               placeholder="you@example.com"
             />
@@ -91,6 +92,7 @@ export default function Auth() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
+              autoComplete={isSignUp ? 'new-password' : 'current-password'}
               className="w-full px-4 py-3.5 bg-amber-50/50 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 placeholder:text-amber-300"
               placeholder="••••••••"
             />
