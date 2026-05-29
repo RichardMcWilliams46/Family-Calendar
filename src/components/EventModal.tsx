@@ -240,8 +240,8 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 animate-fadeIn">
-      <div className="bg-gradient-to-br from-amber-50/95 via-yellow-50/95 to-white/95 backdrop-blur-md rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-full sm:max-w-2xl mx-0 sm:mx-4 h-[92vh] sm:h-auto sm:max-h-[90vh] flex flex-col transform transition-all duration-300 scale-100 overflow-hidden border-2 border-amber-200/50">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 animate-fadeIn px-0">
+      <div className="bg-gradient-to-br from-amber-50/95 via-yellow-50/95 to-white/95 backdrop-blur-md rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-full sm:max-w-2xl mx-0 sm:mx-4 h-[92vh] sm:h-auto sm:max-h-[90vh] flex flex-col transform transition-all duration-300 scale-100 overflow-hidden border-2 border-amber-200/50 min-w-0">
         <div className="bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-white px-6 sm:px-8 py-5 sm:py-6 flex items-center justify-between rounded-t-3xl flex-shrink-0 relative overflow-hidden">
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-2 left-4 text-6xl">🌻</div>
@@ -258,8 +258,8 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="p-6 sm:p-8 space-y-5 sm:space-y-6 overflow-y-auto overflow-x-hidden flex-1 overscroll-contain">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 w-full min-w-0">
+          <div className="p-4 sm:p-8 space-y-5 sm:space-y-6 overflow-y-auto overflow-x-hidden flex-1 overscroll-contain w-full min-w-0">
           <div>
             <label htmlFor="title" className="block text-sm font-semibold text-amber-900 mb-2">
               Event Title
