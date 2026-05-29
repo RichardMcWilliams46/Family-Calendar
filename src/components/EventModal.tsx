@@ -335,7 +335,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
+          <div className={`grid gap-4 ${allDay ? 'grid-cols-1' : 'grid-cols-2'}`}>
             <div>
               <label htmlFor="startDate" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-amber-600 flex-shrink-0" />
@@ -352,7 +352,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
                   }
                 }}
                 required
-                className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-base"
+                className="w-full px-4 py-3 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-base"
               />
             </div>
 
@@ -368,13 +368,13 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
                   required
-                  className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-base"
+                  className="w-full px-4 py-3 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-base"
                 />
               </div>
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
+          <div className={`grid gap-4 ${allDay ? 'grid-cols-1' : 'grid-cols-2'}`}>
             <div>
               <label htmlFor="endDate" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-amber-700 flex-shrink-0" />
@@ -387,7 +387,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
                 onChange={(e) => setEndDate(e.target.value)}
                 min={startDate}
                 required
-                className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-base"
+                className="w-full px-4 py-3 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-base"
               />
             </div>
 
@@ -403,7 +403,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
                   required
-                  className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-base"
+                  className="w-full px-4 py-3 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-base"
                 />
               </div>
             )}
