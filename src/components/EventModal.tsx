@@ -241,7 +241,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 animate-fadeIn">
-      <div className="bg-gradient-to-br from-amber-50/95 via-yellow-50/95 to-white/95 backdrop-blur-md rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-2xl sm:mx-4 h-[92vh] sm:h-auto sm:max-h-[90vh] flex flex-col transform transition-all duration-300 scale-100 overflow-hidden border-2 border-amber-200/50">
+      <div className="bg-gradient-to-br from-amber-50/95 via-yellow-50/95 to-white/95 backdrop-blur-md rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-full sm:max-w-2xl mx-0 sm:mx-4 h-[92vh] sm:h-auto sm:max-h-[90vh] flex flex-col transform transition-all duration-300 scale-100 overflow-hidden border-2 border-amber-200/50">
         <div className="bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-white px-6 sm:px-8 py-5 sm:py-6 flex items-center justify-between rounded-t-3xl flex-shrink-0 relative overflow-hidden">
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-2 left-4 text-6xl">🌻</div>
@@ -335,8 +335,8 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
             )}
           </div>
 
-          <div className={`grid gap-3 ${allDay ? 'grid-cols-1' : 'grid-cols-2'}`}>
-            <div className="min-w-0">
+          <div className="grid grid-cols-2 gap-3" style={{gridTemplateColumns: allDay ? '1fr' : '1fr 1fr'}}>
+            <div className="min-w-0 overflow-hidden">
               <label htmlFor="startDate" className="block text-xs font-semibold text-amber-900 mb-1.5 flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
                 Start Date
@@ -352,12 +352,13 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
                   }
                 }}
                 required
-                className="w-full min-w-0 px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
+                style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
+                className="block px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
               />
             </div>
 
             {!allDay && (
-              <div className="min-w-0">
+              <div className="min-w-0 overflow-hidden">
                 <label htmlFor="startTime" className="block text-xs font-semibold text-amber-900 mb-1.5 flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
                   Start Time
@@ -368,14 +369,15 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
                   required
-                  className="w-full min-w-0 px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
+                  style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
+                  className="block px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
                 />
               </div>
             )}
           </div>
 
-          <div className={`grid gap-3 ${allDay ? 'grid-cols-1' : 'grid-cols-2'}`}>
-            <div className="min-w-0">
+          <div className="grid grid-cols-2 gap-3" style={{gridTemplateColumns: allDay ? '1fr' : '1fr 1fr'}}>
+            <div className="min-w-0 overflow-hidden">
               <label htmlFor="endDate" className="block text-xs font-semibold text-amber-900 mb-1.5 flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
                 End Date
@@ -387,12 +389,13 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
                 onChange={(e) => setEndDate(e.target.value)}
                 min={startDate}
                 required
-                className="w-full min-w-0 px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
+                style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
+                className="block px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
               />
             </div>
 
             {!allDay && (
-              <div className="min-w-0">
+              <div className="min-w-0 overflow-hidden">
                 <label htmlFor="endTime" className="block text-xs font-semibold text-amber-900 mb-1.5 flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
                   End Time
@@ -403,7 +406,8 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
                   required
-                  className="w-full min-w-0 px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
+                  style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
+                  className="block px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
                 />
               </div>
             )}
