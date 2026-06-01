@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase, CalendarEvent, EventTypeColor } from '../lib/supabase';
-import { ChevronLeft, ChevronRight, Plus, LogOut, Settings, Menu, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, LogOut, Settings, Menu, X, MapPin } from 'lucide-react';
 import EventModal from './EventModal';
 import EventList from './EventList';
 import ColorSettings from './ColorSettings';
+import MaltaAssistant from './MaltaAssistant';
 import Sunflower from './Sunflower';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -19,6 +20,7 @@ export default function Calendar() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isBurgerOpen, setIsBurgerOpen] = useState(false);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('list');
@@ -236,6 +238,13 @@ export default function Calendar() {
                   </button>
                 </div>
                 <button
+                  onClick={() => setIsAssistantOpen(true)}
+                  className="flex items-center gap-2 bg-white border-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
+                >
+                  <MapPin className="w-4 h-4" />
+                  <span>Malta</span>
+                </button>
+                <button
                   onClick={() => {
                     setSelectedDate(new Date());
                     setSelectedEvent(null);
@@ -349,6 +358,22 @@ export default function Calendar() {
           onSave={() => {
             loadEventTypeColors();
             loadEvents();
+          }}
+        />
+      )}
+
+      {isAssistantOpen && (
+        <MaltaAssistant
+          onClose={() => setIsAssistantOpen(false)}
+          onAddToCalendar={(discoveredEvent) => {
+            setSelectedDate(
+              discoveredEvent.event_date_parsed
+                ? new Date(discoveredEvent.event_date_parsed + 'T12:00:00')
+                : new Date()
+            );
+            setSelectedEvent(null);
+            setIsAssistantOpen(false);
+            setIsModalOpen(true);
           }}
         />
       )}
