@@ -30,10 +30,13 @@ interface DiscoveredEvent {
 }
 
 const CATEGORY_QUERIES = [
-  { query: "Malta concerts live music 2025 2026", category: "concert" },
-  { query: "Malta theatre shows performances 2025 2026", category: "theatre" },
-  { query: "Malta festivals events 2025 2026", category: "festival" },
-  { query: "Malta events what's on 2026", category: "event" },
+  { query: "site:whatson.com.mt events 2026", category: "event" },
+  { query: "site:showshappening.com Malta events 2026", category: "event" },
+  { query: "site:visitmalta.com events things to do 2026", category: "event" },
+  { query: "site:lovinmalta.com events things to do 2026", category: "event" },
+  { query: "site:ticketline.com.mt concerts shows 2026", category: "concert" },
+  { query: "whatson.com.mt Malta concerts theatre festival 2026", category: "concert" },
+  { query: "ticketline.com.mt Malta live music theatre 2026", category: "theatre" },
 ];
 
 function extractDateFromText(text: string): string | null {
