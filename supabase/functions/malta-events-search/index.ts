@@ -248,21 +248,35 @@ Deno.serve(async (req: Request) => {
       (existing ?? []).map((e: { title: string }) => e.title.toLowerCase().substring(0, 40))
     );
 
+    const todayStr = new Date().toISOString().substring(0, 10);
+
     const toInsert = deduped
-      .filter((e) => !existingTitles.has(e.title.toLowerCase().substring(0, 40)))
+      .filter((e) => {
+        // Only insert events with a future or today date (or no parsed date)
+        if (e.event_date_parsed && e.event_date_parsed < todayStr) return false;
+        return !existingTitles.has(e.title.toLowerCase().substring(0, 40));
+      })
       .map((e) => ({ ...e, user_id: user.id }));
 
     if (toInsert.length > 0) {
       await supabase.from("discovered_events").insert(toInsert);
     }
 
-    // Return all non-dismissed events
+    // Delete any stored past events to keep things clean
+    await supabase
+      .from("discovered_events")
+      .delete()
+      .eq("user_id", user.id)
+      .lt("event_date_parsed", todayStr);
+
+    // Return all non-dismissed future/undated events
     const { data: allEvents } = await supabase
       .from("discovered_events")
       .select("*")
       .eq("user_id", user.id)
       .eq("dismissed", false)
-      .order("discovered_at", { ascending: false });
+      .or(`event_date_parsed.gte.${todayStr},event_date_parsed.is.null`)
+      .order("event_date_parsed", { ascending: true });
 
     return new Response(
       JSON.stringify({
