@@ -3,18 +3,18 @@ import { supabase, EventTypeColor } from '../lib/supabase';
 import { Palette, Save } from 'lucide-react';
 
 const PRESET_COLORS = [
-  { name: 'Amber', value: '#F59E0B' },
   { name: 'Yellow', value: '#EAB308' },
+  { name: 'Amber', value: '#F59E0B' },
   { name: 'Orange', value: '#F97316' },
+  { name: 'Terracotta', value: '#C2410C' },
   { name: 'Red', value: '#DC2626' },
   { name: 'Pink', value: '#EC4899' },
-  { name: 'Purple', value: '#8B5CF6' },
+  { name: 'Coral', value: '#FB7185' },
   { name: 'Blue', value: '#0EA5E9' },
-  { name: 'Green', value: '#10B981' },
   { name: 'Teal', value: '#14B8A6' },
+  { name: 'Green', value: '#10B981' },
   { name: 'Emerald', value: '#059669' },
   { name: 'Lime', value: '#84CC16' },
-  { name: 'Gray', value: '#6B7280' },
 ];
 
 interface ColorSettingsProps {

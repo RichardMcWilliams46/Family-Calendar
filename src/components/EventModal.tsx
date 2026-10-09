@@ -16,18 +16,18 @@ const EVENT_TYPES = [
 ];
 
 const COLORS = [
-  { name: 'Amber', value: '#F59E0B' },
   { name: 'Yellow', value: '#EAB308' },
+  { name: 'Amber', value: '#F59E0B' },
   { name: 'Orange', value: '#F97316' },
+  { name: 'Terracotta', value: '#C2410C' },
   { name: 'Red', value: '#DC2626' },
   { name: 'Pink', value: '#EC4899' },
-  { name: 'Purple', value: '#8B5CF6' },
+  { name: 'Coral', value: '#FB7185' },
   { name: 'Blue', value: '#0EA5E9' },
-  { name: 'Green', value: '#10B981' },
   { name: 'Teal', value: '#14B8A6' },
+  { name: 'Green', value: '#10B981' },
   { name: 'Emerald', value: '#059669' },
   { name: 'Lime', value: '#84CC16' },
-  { name: 'Gray', value: '#6B7280' },
 ];
 
 interface EventModalProps {
@@ -46,21 +46,6 @@ function SectionHeader({ icon: Icon, title }: { icon: typeof Calendar; title: st
       <div className="flex-1 h-px bg-gradient-to-r from-amber-200/60 to-transparent" />
     </div>
   );
-}
-
-function formatDateDisplay(dateStr: string): string {
-  if (!dateStr) return '';
-  const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function formatTimeDisplay(timeStr: string): string {
-  if (!timeStr) return '';
-  const [h, m] = timeStr.split(':');
-  const hour = parseInt(h);
-  const ampm = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour % 12 || 12;
-  return `${displayHour}:${m} ${ampm}`;
 }
 
 export default function EventModal({ selectedDate, selectedEvent, eventTypeColors, onClose, onSave }: EventModalProps) {
@@ -326,24 +311,9 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
     }
   };
 
-  // ===== Live preview values =====
-  const previewDateText = useMemo(() => {
-    if (!startDate) return '';
-    const parts: string[] = [];
-    parts.push(formatDateDisplay(startDate));
-    if (!allDay && startTime) parts.push(formatTimeDisplay(startTime));
-    if (endDate && endDate !== startDate) {
-      parts.push('-');
-      parts.push(formatDateDisplay(endDate));
-      if (!allDay && endTime) parts.push(formatTimeDisplay(endTime));
-    } else if (!allDay && endTime && endDate === startDate) {
-      parts.push('-');
-      parts.push(formatTimeDisplay(endTime));
-    }
-    return parts.join(' ');
-  }, [startDate, endDate, startTime, endTime, allDay]);
 
   const selectedColorName = COLORS.find(c => c.value === color)?.name ?? '';
+
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 animate-fadeIn px-0">
@@ -367,34 +337,6 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 w-full min-w-0">
           <div className="p-4 sm:p-8 space-y-6 overflow-y-auto overflow-x-hidden flex-1 overscroll-contain w-full min-w-0">
-
-            {/* ===== Live Preview Card ===== */}
-            <div className="bg-white/80 border border-amber-200/60 rounded-xl p-4 shadow-sm">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-400 mb-2.5">Live Preview</p>
-              <div className="flex items-start gap-3">
-                <div
-                  className="w-1.5 self-stretch rounded-full shadow-sm flex-shrink-0"
-                  style={{ backgroundColor: color }}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className={`font-semibold text-amber-900 text-sm ${!title ? 'italic text-amber-300' : ''}`}>
-                    {title || 'Event title'}
-                  </p>
-                  {previewDateText && (
-                    <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
-                      <CalendarClock className="w-3 h-3 flex-shrink-0" />
-                      {previewDateText}
-                    </p>
-                  )}
-                  <span
-                    className="inline-block mt-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full text-white"
-                    style={{ backgroundColor: color }}
-                  >
-                    {eventType}
-                  </span>
-                </div>
-              </div>
-            </div>
 
             {/* ===== Section: Details ===== */}
             <SectionHeader icon={FileText} title="Details" />
