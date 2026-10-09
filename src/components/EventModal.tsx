@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase, CalendarEvent, EventTypeColor } from '../lib/supabase';
-import { X, Calendar, Clock, Tag, Palette, Trash2, Repeat, Link } from 'lucide-react';
+import { X, Calendar, Clock, Tag, Palette, Trash2, Repeat, Link, FileText, CalendarClock, AlertCircle } from 'lucide-react';
 
 const EVENT_TYPES = [
   'Event',
@@ -38,6 +38,31 @@ interface EventModalProps {
   onSave: () => void;
 }
 
+function SectionHeader({ icon: Icon, title }: { icon: typeof Calendar; title: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-3 mt-1">
+      <Icon className="w-4 h-4 text-amber-500 flex-shrink-0" />
+      <h3 className="text-xs font-bold uppercase tracking-wider text-amber-500">{title}</h3>
+      <div className="flex-1 h-px bg-gradient-to-r from-amber-200/60 to-transparent" />
+    </div>
+  );
+}
+
+function formatDateDisplay(dateStr: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function formatTimeDisplay(timeStr: string): string {
+  if (!timeStr) return '';
+  const [h, m] = timeStr.split(':');
+  const hour = parseInt(h);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${m} ${ampm}`;
+}
+
 export default function EventModal({ selectedDate, selectedEvent, eventTypeColors, onClose, onSave }: EventModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -54,6 +79,8 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [submissionBlocked, setSubmissionBlocked] = useState(false);
 
   useEffect(() => {
     if (selectedEvent) {
@@ -107,10 +134,69 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
     }
   }, [eventType, eventTypeColors]);
 
+  // ===== Inline validation =====
+  const endTimeBeforeStart = useMemo(() => {
+    if (allDay) return false;
+    if (startDate === endDate && startTime && endTime) {
+      return endTime <= startTime;
+    }
+    return false;
+  }, [allDay, startDate, endDate, startTime, endTime]);
+
+  const recEndBeforeStart = useMemo(() => {
+    if (!isRecurring || !recurrenceEndDate || !startDate) return false;
+    return recurrenceEndDate < startDate;
+  }, [isRecurring, recurrenceEndDate, startDate]);
+
+  const hasValidationErrors = endTimeBeforeStart || recEndBeforeStart;
+
+  // ===== Recurrence preview =====
+  const recurrenceSummary = useMemo(() => {
+    if (!isRecurring || !startDate) return null;
+
+    const ruleText: Record<string, string> = {
+      daily: 'Daily',
+      weekly: 'Weekly',
+      monthly: 'Monthly',
+      yearly: 'Yearly',
+    };
+    const prefix = `Repeats ${ruleText[recurrenceRule]?.toLowerCase()}`;
+
+    if (!recurrenceEndDate) {
+      return `${prefix} indefinitely (capped at 1 year)`;
+    }
+
+    const recEnd = new Date(recurrenceEndDate + 'T12:00:00');
+    const start = new Date(startDate + 'T12:00:00');
+
+    const dayMs = 24 * 60 * 60 * 1000;
+    let count = 0;
+
+    if (recurrenceRule === 'daily') {
+      count = Math.floor((recEnd.getTime() - start.getTime()) / dayMs);
+    } else if (recurrenceRule === 'weekly') {
+      count = Math.floor((recEnd.getTime() - start.getTime()) / (7 * dayMs));
+    } else if (recurrenceRule === 'monthly') {
+      count = (recEnd.getFullYear() - start.getFullYear()) * 12 + (recEnd.getMonth() - start.getMonth());
+    } else if (recurrenceRule === 'yearly') {
+      count = recEnd.getFullYear() - start.getFullYear();
+    }
+
+    const endDateText = recEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    return `${prefix} until ${endDateText} -- ${count} occurrence${count !== 1 ? 's' : ''} will be created`;
+  }, [isRecurring, recurrenceRule, recurrenceEndDate, startDate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (hasValidationErrors) {
+      setSubmissionBlocked(true);
+      return;
+    }
+
     setLoading(true);
     setError('');
+    setSubmissionBlocked(false);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -219,9 +305,10 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
   };
 
   const handleDelete = async () => {
-    if (!selectedEvent || !confirm('Are you sure you want to delete this event?')) return;
+    if (!selectedEvent) return;
 
     setLoading(true);
+    setConfirmDelete(false);
     try {
       const { error } = await supabase
         .from('calendar_events')
@@ -239,9 +326,29 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
     }
   };
 
+  // ===== Live preview values =====
+  const previewDateText = useMemo(() => {
+    if (!startDate) return '';
+    const parts: string[] = [];
+    parts.push(formatDateDisplay(startDate));
+    if (!allDay && startTime) parts.push(formatTimeDisplay(startTime));
+    if (endDate && endDate !== startDate) {
+      parts.push('-');
+      parts.push(formatDateDisplay(endDate));
+      if (!allDay && endTime) parts.push(formatTimeDisplay(endTime));
+    } else if (!allDay && endTime && endDate === startDate) {
+      parts.push('-');
+      parts.push(formatTimeDisplay(endTime));
+    }
+    return parts.join(' ');
+  }, [startDate, endDate, startTime, endTime, allDay]);
+
+  const selectedColorName = COLORS.find(c => c.value === color)?.name ?? '';
+
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 animate-fadeIn px-0">
       <div className="bg-gradient-to-br from-amber-50/95 via-yellow-50/95 to-white/95 backdrop-blur-md rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-full sm:max-w-2xl mx-0 sm:mx-4 h-[92vh] sm:h-auto sm:max-h-[90vh] flex flex-col transform transition-all duration-300 scale-100 overflow-hidden border-2 border-amber-200/50 min-w-0">
+        {/* Header */}
         <div className="bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-white px-6 sm:px-8 py-5 sm:py-6 flex items-center justify-between rounded-t-3xl flex-shrink-0 relative overflow-hidden">
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-2 left-4 text-6xl">🌻</div>
@@ -259,254 +366,363 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 w-full min-w-0">
-          <div className="p-4 sm:p-8 space-y-5 sm:space-y-6 overflow-y-auto overflow-x-hidden flex-1 overscroll-contain w-full min-w-0">
-          <div>
-            <label htmlFor="title" className="block text-sm font-semibold text-amber-900 mb-2">
-              Event Title
-            </label>
-            <input
-              id="title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-base placeholder:text-amber-300"
-              placeholder="Enter event title"
-            />
-          </div>
+          <div className="p-4 sm:p-8 space-y-6 overflow-y-auto overflow-x-hidden flex-1 overscroll-contain w-full min-w-0">
 
-          <div>
-            <label htmlFor="description" className="block text-sm font-semibold text-amber-900 mb-2">
-              Description
-            </label>
-            <textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 resize-none text-base placeholder:text-amber-300"
-              placeholder="Add details about this event"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="hyperlink" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
-              <Link className="w-4 h-4 text-amber-600" />
-              Link (accommodation, venue, etc.)
-            </label>
-            <input
-              id="hyperlink"
-              type="url"
-              value={hyperlink}
-              onChange={(e) => setHyperlink(e.target.value)}
-              className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-base placeholder:text-amber-300"
-              placeholder="https://example.com/booking"
-            />
-          </div>
-
-          <div className="space-y-2.5 sm:space-y-3">
-            <div className="flex items-center gap-3 bg-gradient-to-r from-amber-100/50 to-yellow-100/50 p-3.5 sm:p-4 rounded-xl border border-amber-200/50">
-              <input
-                id="allDay"
-                type="checkbox"
-                checked={allDay}
-                onChange={(e) => setAllDay(e.target.checked)}
-                className="w-5 h-5 text-amber-600 border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 flex-shrink-0"
-              />
-              <label htmlFor="allDay" className="text-sm font-semibold text-amber-900 cursor-pointer select-none">
-                All-day event
-              </label>
+            {/* ===== Live Preview Card ===== */}
+            <div className="bg-white/80 border border-amber-200/60 rounded-xl p-4 shadow-sm">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-400 mb-2.5">Live Preview</p>
+              <div className="flex items-start gap-3">
+                <div
+                  className="w-1.5 self-stretch rounded-full shadow-sm flex-shrink-0"
+                  style={{ backgroundColor: color }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className={`font-semibold text-amber-900 text-sm ${!title ? 'italic text-amber-300' : ''}`}>
+                    {title || 'Event title'}
+                  </p>
+                  {previewDateText && (
+                    <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
+                      <CalendarClock className="w-3 h-3 flex-shrink-0" />
+                      {previewDateText}
+                    </p>
+                  )}
+                  <span
+                    className="inline-block mt-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full text-white"
+                    style={{ backgroundColor: color }}
+                  >
+                    {eventType}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {!selectedEvent && (
-              <div className="flex items-center gap-3 bg-gradient-to-r from-yellow-100/50 to-amber-100/50 p-3.5 sm:p-4 rounded-xl border border-amber-200/50">
+            {/* ===== Section: Details ===== */}
+            <SectionHeader icon={FileText} title="Details" />
+            <div className="space-y-5">
+              <div>
+                <label htmlFor="title" className="block text-sm font-semibold text-amber-900 mb-2">
+                  Event Title
+                </label>
                 <input
-                  id="isRecurring"
+                  id="title"
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-base placeholder:text-amber-300"
+                  placeholder="Enter event title"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="description" className="block text-sm font-semibold text-amber-900 mb-2">
+                  Description
+                </label>
+                <textarea
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 resize-none text-base placeholder:text-amber-300"
+                  placeholder="Add details about this event"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="hyperlink" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                  <Link className="w-4 h-4 text-amber-600" />
+                  Link (accommodation, venue, etc.)
+                </label>
+                <input
+                  id="hyperlink"
+                  type="url"
+                  value={hyperlink}
+                  onChange={(e) => setHyperlink(e.target.value)}
+                  className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-base placeholder:text-amber-300"
+                  placeholder="https://example.com/booking"
+                />
+              </div>
+            </div>
+
+            {/* ===== Section: When ===== */}
+            <SectionHeader icon={CalendarClock} title="When" />
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 bg-gradient-to-r from-amber-100/50 to-yellow-100/50 p-3.5 sm:p-4 rounded-xl border border-amber-200/50">
+                <input
+                  id="allDay"
                   type="checkbox"
-                  checked={isRecurring}
-                  onChange={(e) => setIsRecurring(e.target.checked)}
+                  checked={allDay}
+                  onChange={(e) => setAllDay(e.target.checked)}
                   className="w-5 h-5 text-amber-600 border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 flex-shrink-0"
                 />
-                <label htmlFor="isRecurring" className="text-sm font-semibold text-amber-900 flex items-center gap-2 cursor-pointer select-none">
-                  <Repeat className="w-4 h-4 flex-shrink-0" />
-                  Recurring event
+                <label htmlFor="allDay" className="text-sm font-semibold text-amber-900 cursor-pointer select-none">
+                  All-day event
                 </label>
               </div>
-            )}
-          </div>
 
-          <div className="grid grid-cols-2 gap-3" style={{gridTemplateColumns: allDay ? '1fr' : '1fr 1fr'}}>
-            <div className="min-w-0 overflow-hidden">
-              <label htmlFor="startDate" className="block text-xs font-semibold text-amber-900 mb-1.5 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
-                Start Date
-              </label>
-              <input
-                id="startDate"
-                type="date"
-                value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
-                  if (endDate && e.target.value > endDate) {
-                    setEndDate(e.target.value);
-                  }
-                }}
-                required
-                style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
-                className="block px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
-              />
+              <div className="grid grid-cols-2 gap-3" style={{gridTemplateColumns: allDay ? '1fr' : '1fr 1fr'}}>
+                <div className="min-w-0 overflow-hidden">
+                  <label htmlFor="startDate" className="block text-xs font-semibold text-amber-900 mb-1.5 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                    Start Date
+                  </label>
+                  <input
+                    id="startDate"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      if (endDate && e.target.value > endDate) {
+                        setEndDate(e.target.value);
+                      }
+                    }}
+                    required
+                    style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
+                    className="block px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
+                  />
+                </div>
+
+                {!allDay && (
+                  <div className="min-w-0 overflow-hidden">
+                    <label htmlFor="startTime" className="block text-xs font-semibold text-amber-900 mb-1.5 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                      Start Time
+                    </label>
+                    <input
+                      id="startTime"
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      required
+                      style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
+                      className="block px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3" style={{gridTemplateColumns: allDay ? '1fr' : '1fr 1fr'}}>
+                <div className="min-w-0 overflow-hidden">
+                  <label htmlFor="endDate" className="block text-xs font-semibold text-amber-900 mb-1.5 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
+                    End Date
+                  </label>
+                  <input
+                    id="endDate"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    min={startDate}
+                    required
+                    style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
+                    className={`block px-2.5 py-2.5 bg-white/80 border-2 rounded-xl focus:ring-2 focus:ring-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm ${
+                      endTimeBeforeStart ? 'border-red-400' : 'border-amber-200 focus:border-amber-400'
+                    }`}
+                  />
+                </div>
+
+                {!allDay && (
+                  <div className="min-w-0 overflow-hidden">
+                    <label htmlFor="endTime" className="block text-xs font-semibold text-amber-900 mb-1.5 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
+                      End Time
+                    </label>
+                    <input
+                      id="endTime"
+                      type="time"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      required
+                      style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
+                      className={`block px-2.5 py-2.5 bg-white/80 border-2 rounded-xl focus:ring-2 focus:ring-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm ${
+                        endTimeBeforeStart ? 'border-red-400 focus:ring-red-400' : 'border-amber-200 focus:border-amber-400'
+                      }`}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Inline validation: end time before start */}
+              {endTimeBeforeStart && (
+                <div className="flex items-center gap-2 text-xs text-red-600 font-medium bg-red-50/60 border border-red-200 rounded-lg px-3 py-2 animate-slideDown">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  End time must be after the start time
+                </div>
+              )}
             </div>
 
-            {!allDay && (
-              <div className="min-w-0 overflow-hidden">
-                <label htmlFor="startTime" className="block text-xs font-semibold text-amber-900 mb-1.5 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
-                  Start Time
-                </label>
-                <input
-                  id="startTime"
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  required
-                  style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
-                  className="block px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
-                />
-              </div>
+            {/* ===== Section: Repeats ===== */}
+            {!selectedEvent && (
+              <>
+                <SectionHeader icon={Repeat} title="Repeats" />
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 bg-gradient-to-r from-yellow-100/50 to-amber-100/50 p-3.5 sm:p-4 rounded-xl border border-amber-200/50">
+                    <input
+                      id="isRecurring"
+                      type="checkbox"
+                      checked={isRecurring}
+                      onChange={(e) => setIsRecurring(e.target.checked)}
+                      className="w-5 h-5 text-amber-600 border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 flex-shrink-0"
+                    />
+                    <label htmlFor="isRecurring" className="text-sm font-semibold text-amber-900 flex items-center gap-2 cursor-pointer select-none">
+                      <Repeat className="w-4 h-4 flex-shrink-0" />
+                      Recurring event
+                    </label>
+                  </div>
+
+                  {isRecurring && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 bg-gradient-to-r from-yellow-100/50 to-amber-100/50 p-4 sm:p-5 rounded-xl border border-amber-200/50">
+                        <div>
+                          <label htmlFor="recurrenceRule" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                            <Repeat className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                            Repeat
+                          </label>
+                          <select
+                            id="recurrenceRule"
+                            value={recurrenceRule}
+                            onChange={(e) => setRecurrenceRule(e.target.value)}
+                            className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition-all duration-200 font-medium text-base"
+                          >
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="yearly">Yearly</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label htmlFor="recurrenceEndDate" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                            End Repeat
+                          </label>
+                          <input
+                            id="recurrenceEndDate"
+                            type="date"
+                            value={recurrenceEndDate}
+                            onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                            className={`w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none transition-all duration-200 text-base placeholder:text-amber-300 ${
+                              recEndBeforeStart ? 'border-red-400 focus:ring-red-400' : 'border-amber-200 focus:border-amber-400'
+                            }`}
+                            placeholder="Optional"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Recurrence preview summary */}
+                      {recurrenceSummary && !recEndBeforeStart && (
+                        <div className="flex items-center gap-2 text-xs text-amber-700 font-medium bg-amber-50/80 border border-amber-200/60 rounded-lg px-3 py-2.5 animate-slideDown">
+                          <Repeat className="w-3.5 h-3.5 flex-shrink-0 text-amber-500" />
+                          {recurrenceSummary}
+                        </div>
+                      )}
+
+                      {/* Inline validation: recurrence end before start */}
+                      {recEndBeforeStart && (
+                        <div className="flex items-center gap-2 text-xs text-red-600 font-medium bg-red-50/60 border border-red-200 rounded-lg px-3 py-2 animate-slideDown">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                          Recurrence end date must be after the event start date
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
-          </div>
 
-          <div className="grid grid-cols-2 gap-3" style={{gridTemplateColumns: allDay ? '1fr' : '1fr 1fr'}}>
-            <div className="min-w-0 overflow-hidden">
-              <label htmlFor="endDate" className="block text-xs font-semibold text-amber-900 mb-1.5 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
-                End Date
-              </label>
-              <input
-                id="endDate"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                min={startDate}
-                required
-                style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
-                className="block px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
-              />
-            </div>
-
-            {!allDay && (
-              <div className="min-w-0 overflow-hidden">
-                <label htmlFor="endTime" className="block text-xs font-semibold text-amber-900 mb-1.5 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
-                  End Time
-                </label>
-                <input
-                  id="endTime"
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  required
-                  style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
-                  className="block px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
-                />
-              </div>
-            )}
-          </div>
-
-          {isRecurring && !selectedEvent && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 bg-gradient-to-r from-yellow-100/50 to-amber-100/50 p-4 sm:p-5 rounded-xl border border-amber-200/50">
+            {/* ===== Section: Appearance ===== */}
+            <SectionHeader icon={Palette} title="Appearance" />
+            <div className="space-y-5">
               <div>
-                <label htmlFor="recurrenceRule" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
-                  <Repeat className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                  Repeat
+                <label htmlFor="eventType" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  Event Type
                 </label>
                 <select
-                  id="recurrenceRule"
-                  value={recurrenceRule}
-                  onChange={(e) => setRecurrenceRule(e.target.value)}
-                  className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition-all duration-200 font-medium text-base"
+                  id="eventType"
+                  value={eventType}
+                  onChange={(e) => setEventType(e.target.value)}
+                  className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 font-medium text-base"
                 >
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Yearly</option>
+                  {EVENT_TYPES.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="recurrenceEndDate" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                  End Repeat
+                <label className="block text-sm font-semibold text-amber-900 mb-2.5 sm:mb-3 flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  Color {selectedColorName && <span className="text-amber-400 font-normal">-- {selectedColorName}</span>}
                 </label>
-                <input
-                  id="recurrenceEndDate"
-                  type="date"
-                  value={recurrenceEndDate}
-                  onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                  className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition-all duration-200 text-base placeholder:text-amber-300"
-                  placeholder="Optional"
-                />
+                <div className="flex flex-wrap gap-2 sm:gap-3">
+                  {COLORS.map(c => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setColor(c.value)}
+                      className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl transition-all duration-200 transform active:scale-95 sm:hover:scale-110 shadow-md active:shadow-lg sm:hover:shadow-lg flex-shrink-0 ${
+                        color === c.value ? 'ring-4 ring-amber-400 ring-offset-2' : 'sm:hover:ring-2 sm:hover:ring-amber-300 sm:hover:ring-offset-1'
+                      }`}
+                      style={{ backgroundColor: c.value }}
+                      title={c.name}
+                      aria-label={c.name}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
-          )}
 
-          <div>
-            <label htmlFor="eventType" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
-              <Tag className="w-4 h-4 text-amber-600 flex-shrink-0" />
-              Event Type
-            </label>
-            <select
-              id="eventType"
-              value={eventType}
-              onChange={(e) => setEventType(e.target.value)}
-              className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 font-medium text-base"
-            >
-              {EVENT_TYPES.map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
+            {/* Submission blocked message */}
+            {submissionBlocked && hasValidationErrors && (
+              <div className="flex items-center gap-2 text-sm text-red-700 font-medium bg-red-100/80 border-2 border-red-300 rounded-xl px-4 py-3.5 animate-slideDown">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                Please fix the highlighted fields before saving
+              </div>
+            )}
+
+            {/* Server error */}
+            {error && (
+              <div className="bg-red-100/80 border-2 border-red-300 text-red-800 px-4 py-3.5 sm:px-5 sm:py-4 rounded-xl text-sm font-medium">
+                {error}
+              </div>
+            )}
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-amber-900 mb-2.5 sm:mb-3 flex items-center gap-2">
-              <Palette className="w-4 h-4 text-amber-600 flex-shrink-0" />
-              Color (override default)
-            </label>
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              {COLORS.map(c => (
-                <button
-                  key={c.value}
-                  type="button"
-                  onClick={() => setColor(c.value)}
-                  className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl transition-all duration-200 transform active:scale-95 sm:hover:scale-110 shadow-md active:shadow-lg sm:hover:shadow-lg flex-shrink-0 ${
-                    color === c.value ? 'ring-4 ring-amber-400 ring-offset-2' : 'sm:hover:ring-2 sm:hover:ring-amber-300 sm:hover:ring-offset-1'
-                  }`}
-                  style={{ backgroundColor: c.value }}
-                  title={c.name}
-                  aria-label={c.name}
-                />
-              ))}
-            </div>
-          </div>
-
-          {error && (
-            <div className="bg-red-100/80 border-2 border-red-300 text-red-800 px-4 py-3.5 sm:px-5 sm:py-4 rounded-xl text-sm font-medium">
-              {error}
-            </div>
-          )}
-          </div>
-
+          {/* ===== Footer / Actions ===== */}
           <div className="flex flex-col sm:flex-row gap-3 p-6 sm:p-8 pt-4 sm:pt-6 border-t-2 border-amber-100 flex-shrink-0 bg-gradient-to-br from-amber-50/80 to-yellow-50/80">
             {selectedEvent && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={loading}
-                className="flex items-center justify-center gap-2 px-6 py-3.5 bg-red-500 active:bg-red-600 sm:hover:bg-red-600 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 shadow-md active:shadow-lg sm:hover:shadow-lg transform active:scale-95 sm:hover:-translate-y-0.5 w-full sm:w-auto touch-manipulation"
-              >
-                <Trash2 className="w-5 h-5 flex-shrink-0" />
-                Delete
-              </button>
+              confirmDelete ? (
+                <div className="flex items-center gap-2 w-full sm:w-auto animate-slideDown">
+                  <span className="text-sm font-medium text-red-700 hidden sm:inline">Delete this event?</span>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={loading}
+                    className="flex items-center justify-center gap-1.5 px-4 py-3 bg-red-600 active:bg-red-700 hover:bg-red-700 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 shadow-md text-sm touch-manipulation"
+                  >
+                    <Trash2 className="w-4 h-4 flex-shrink-0" />
+                    {loading ? 'Deleting...' : 'Yes, Delete'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(false)}
+                    className="px-4 py-3 border-2 border-amber-300 hover:bg-amber-50 text-amber-900 font-semibold rounded-xl transition-all duration-200 text-sm touch-manipulation bg-white/50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={loading}
+                  className="flex items-center justify-center gap-2 px-6 py-3.5 bg-red-500 active:bg-red-600 sm:hover:bg-red-600 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 shadow-md active:shadow-lg sm:hover:shadow-lg transform active:scale-95 sm:hover:-translate-y-0.5 w-full sm:w-auto touch-manipulation"
+                >
+                  <Trash2 className="w-5 h-5 flex-shrink-0" />
+                  Delete
+                </button>
+              )
             )}
             <div className="flex-1" />
             <button
