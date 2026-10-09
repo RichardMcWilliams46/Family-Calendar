@@ -38,7 +38,6 @@ export default function EventList({ events, onEventClick, currentDate, filterTyp
   const monthEvents = events.filter(event => {
     const start = new Date(event.start_date);
     const end = new Date(event.end_date);
-    // Include event if it overlaps with the current month at all
     const monthStart = new Date(year, month, 1);
     const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
     return start <= monthEnd && end >= monthStart;
@@ -53,12 +52,13 @@ export default function EventList({ events, onEventClick, currentDate, filterTyp
     : monthEvents.length;
 
   return (
-    <div className="p-6 bg-gradient-to-br from-amber-50/20 via-transparent to-yellow-50/20">
-      <div className="mb-6 flex items-center justify-center gap-3">
-        <div className="flex bg-amber-100/50 rounded-lg p-1">
+    <div>
+      {/* Filter toggle */}
+      <div className="mb-5 flex items-center justify-center">
+        <div className="flex bg-amber-100/50 rounded-xl p-1">
           <button
             onClick={() => onFilterChange('all')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all relative ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all relative ${
               filterType === 'all' ? 'bg-white text-amber-900 shadow-sm' : 'text-amber-700 hover:text-amber-900'
             }`}
           >
@@ -71,11 +71,11 @@ export default function EventList({ events, onEventClick, currentDate, filterTyp
           </button>
           <button
             onClick={() => onFilterChange('events-holidays')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all relative ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all relative ${
               filterType === 'events-holidays' ? 'bg-white text-amber-900 shadow-sm' : 'text-amber-700 hover:text-amber-900'
             }`}
           >
-            Holidays & Events
+            Holidays &amp; Events
             {filterType === 'events-holidays' && (
               <span className="absolute -top-1 -right-1 bg-gradient-to-br from-amber-400 to-yellow-500 text-white text-xs font-semibold rounded-full w-5 h-5 flex items-center justify-center shadow-sm">
                 {filteredCount}
@@ -86,7 +86,7 @@ export default function EventList({ events, onEventClick, currentDate, filterTyp
       </div>
 
       {filteredEvents.length === 0 ? (
-        <div className="text-center py-12">
+        <div className="text-center py-12 sm:py-16">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100/50 rounded-2xl mb-4 border border-amber-200/50">
             <Calendar className="w-8 h-8 text-amber-500" />
           </div>
@@ -98,14 +98,14 @@ export default function EventList({ events, onEventClick, currentDate, filterTyp
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {filteredEvents.map(event => {
             const showYear = shouldShowYear(event.start_date, event.end_date);
             return (
               <div
                 key={event.id}
                 onClick={() => onEventClick(event)}
-                className="bg-white/90 border border-amber-200/50 rounded-lg p-4 hover:border-amber-300 hover:shadow-md hover:bg-white transition-all cursor-pointer"
+                className="bg-white/90 border border-amber-200/50 rounded-xl p-4 hover:border-amber-300 hover:shadow-md hover:bg-white transition-all cursor-pointer active:scale-[0.99]"
               >
                 <div className="flex items-start gap-3">
                   <div
@@ -115,7 +115,7 @@ export default function EventList({ events, onEventClick, currentDate, filterTyp
                   <div className="flex-1 min-w-0">
                     <h4 className="font-semibold text-amber-900 mb-1">{event.title}</h4>
                     {event.description && (
-                      <p className="text-sm text-amber-800/80 mb-2">{event.description}</p>
+                      <p className="text-sm text-amber-800/80 mb-2 line-clamp-2">{event.description}</p>
                     )}
                     {event.hyperlink && (
                       <a
@@ -129,7 +129,7 @@ export default function EventList({ events, onEventClick, currentDate, filterTyp
                         View Location
                       </a>
                     )}
-                    <div className="flex flex-wrap gap-3 text-xs text-amber-700/80">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-amber-700/80">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-amber-500" />
                         <span>

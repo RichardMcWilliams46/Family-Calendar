@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { X, MapPin, ExternalLink, Plus, RefreshCw, Music, Theater, Calendar, Star, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
+import { MapPin, ExternalLink, Plus, RefreshCw, Music, Theater, Calendar, Star, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 
 interface DiscoveredEvent {
   id: string;
@@ -18,7 +18,6 @@ interface DiscoveredEvent {
 }
 
 interface Props {
-  onClose: () => void;
   onAddToCalendar: (event: DiscoveredEvent) => void;
 }
 
@@ -56,7 +55,7 @@ function timeAgo(isoStr: string): string {
   return `${days} days ago`;
 }
 
-export default function MaltaAssistant({ onClose, onAddToCalendar }: Props) {
+export default function MaltaAssistant({ onAddToCalendar }: Props) {
   const [events, setEvents] = useState<DiscoveredEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -126,236 +125,224 @@ export default function MaltaAssistant({ onClose, onAddToCalendar }: Props) {
   }, {} as Record<string, number>);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[85vh] overflow-hidden border border-amber-200/50">
-
-        {/* Header */}
-        <div className="bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 px-5 py-4 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
-                <MapPin className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-white font-bold text-lg leading-tight">Malta Assistant</h2>
-                <p className="text-amber-100 text-xs">Concerts, shows & events in Malta</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => fetchEvents(true)}
-                disabled={refreshing || loading}
-                className="p-2 hover:bg-white/20 rounded-xl transition-colors disabled:opacity-50"
-                title="Refresh"
-              >
-                <RefreshCw className={`w-4 h-4 text-white ${refreshing ? 'animate-spin' : ''}`} />
-              </button>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-white/20 rounded-xl transition-colors"
-              >
-                <X className="w-5 h-5 text-white" />
-              </button>
-            </div>
+    <div>
+      {/* Page header */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-yellow-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
+            <MapPin className="w-5 h-5 text-white" />
           </div>
-
-          {newCount > 0 && (
-            <div className="mt-3 bg-white/20 rounded-xl px-3 py-2 text-white text-xs font-medium">
-              {newCount} new event{newCount !== 1 ? 's' : ''} found since your last visit
-            </div>
-          )}
+          <div>
+            <h2 className="text-lg sm:text-xl font-bold text-amber-900">Malta Assistant</h2>
+            <p className="text-sm text-amber-600">Concerts, shows &amp; events in Malta</p>
+          </div>
         </div>
+        <button
+          onClick={() => fetchEvents(true)}
+          disabled={refreshing || loading}
+          className="p-2.5 bg-white/80 border border-amber-200 rounded-xl text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50 flex-shrink-0"
+          title="Refresh"
+          aria-label="Refresh events"
+        >
+          <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
 
-        {/* Filter tabs */}
-        <div className="flex gap-1 px-4 py-3 bg-amber-50/60 border-b border-amber-100 flex-shrink-0 overflow-x-auto">
-          {categories.map(cat => {
-            const count = categoryCounts[cat];
-            if (count === 0 && cat !== 'all') return null;
-            const Icon = cat === 'all' ? Star : CATEGORY_ICONS[cat];
+      {/* New events badge */}
+      {newCount > 0 && !loading && (
+        <div className="mb-4 bg-gradient-to-r from-amber-100 to-yellow-100 border border-amber-200 rounded-xl px-4 py-2.5 text-amber-800 text-sm font-medium animate-slideDown">
+          {newCount} new event{newCount !== 1 ? 's' : ''} found since your last visit
+        </div>
+      )}
+
+      {/* Filter tabs */}
+      <div className="flex gap-1.5 mb-5 overflow-x-auto no-scrollbar pb-1">
+        {categories.map(cat => {
+          const count = categoryCounts[cat];
+          if (count === 0 && cat !== 'all') return null;
+          const Icon = cat === 'all' ? Star : CATEGORY_ICONS[cat];
+          return (
+            <button
+              key={cat}
+              onClick={() => setFilter(cat)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
+                filter === cat
+                  ? 'bg-amber-400 text-white shadow-sm'
+                  : 'bg-white/80 text-amber-800 border border-amber-200 hover:bg-amber-50'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              <span className="capitalize">{cat === 'all' ? 'All' : cat}</span>
+              <span className={`text-xs rounded-full px-1.5 py-0.5 ${
+                filter === cat ? 'bg-white/30 text-white' : 'bg-amber-100 text-amber-600'
+              }`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Content */}
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <div className="w-12 h-12 border-[3px] border-amber-200 border-t-amber-400 rounded-full animate-spin" />
+          <div className="text-center">
+            <p className="text-amber-900 font-medium text-sm">Searching for Malta events...</p>
+            <p className="text-amber-500 text-xs mt-1">Scanning concerts, theatre &amp; more</p>
+          </div>
+        </div>
+      )}
+
+      {!loading && error === 'no_key' && (
+        <div className="p-6 text-center bg-white/60 rounded-2xl border border-amber-200/50">
+          <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-7 h-7 text-amber-500" />
+          </div>
+          <h3 className="font-semibold text-amber-900 mb-2">Search not configured</h3>
+          <p className="text-sm text-amber-700 mb-4 leading-relaxed">
+            A Tavily API key is needed to search for Malta events. Add <code className="bg-amber-100 px-1 rounded text-xs">TAVILY_API_KEY</code> to your Supabase edge function secrets to enable live event discovery.
+          </p>
+        </div>
+      )}
+
+      {!loading && error && error !== 'no_key' && (
+        <div className="p-6 text-center bg-white/60 rounded-2xl border border-amber-200/50">
+          <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-3" />
+          <p className="text-sm text-red-600">{error}</p>
+          <button
+            onClick={() => fetchEvents(true)}
+            className="mt-3 text-xs text-amber-600 underline"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!loading && !error && filtered.length === 0 && (
+        <div className="p-8 text-center bg-white/60 rounded-2xl border border-amber-200/50">
+          <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Calendar className="w-7 h-7 text-amber-300" />
+          </div>
+          <p className="text-amber-800 font-medium text-sm">No events found yet</p>
+          <p className="text-amber-500 text-xs mt-1">Refresh or check back later</p>
+        </div>
+      )}
+
+      {!loading && !error && filtered.length > 0 && (
+        <div className="space-y-3">
+          {filtered.map(event => {
+            const Icon = CATEGORY_ICONS[event.category] ?? Calendar;
+            const colorClass = CATEGORY_COLORS[event.category] ?? CATEGORY_COLORS.event;
+            const isExpanded = expandedId === event.id;
+
             return (
-              <button
-                key={cat}
-                onClick={() => setFilter(cat)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex-shrink-0 ${
-                  filter === cat
-                    ? 'bg-amber-400 text-white shadow-sm'
-                    : 'bg-white text-amber-800 border border-amber-200 hover:bg-amber-50'
+              <div
+                key={event.id}
+                className={`bg-white/90 rounded-xl border transition-all duration-200 ${
+                  event.added_to_calendar
+                    ? 'border-green-200 bg-green-50/30'
+                    : 'border-amber-100 hover:border-amber-200 hover:shadow-sm'
                 }`}
               >
-                <Icon className="w-3 h-3" />
-                <span className="capitalize">{cat === 'all' ? 'All' : cat}</span>
-                <span className={`text-xs rounded-full px-1.5 ${filter === cat ? 'bg-white/30 text-white' : 'bg-amber-100 text-amber-600'}`}>
-                  {count}
-                </span>
-              </button>
+                <div className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center border ${colorClass}`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold text-amber-900 text-sm leading-tight line-clamp-2">
+                          {event.title}
+                        </p>
+                        <button
+                          onClick={() => dismissEvent(event.id)}
+                          className="flex-shrink-0 p-1 text-amber-300 hover:text-amber-500 transition-colors"
+                          aria-label="Dismiss"
+                        >
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                        {event.event_date_parsed && (
+                          <span className="text-xs text-amber-600 font-medium">
+                            {formatEventDate(event.event_date_parsed)}
+                          </span>
+                        )}
+                        {event.venue && (
+                          <span className="text-xs text-amber-500 flex items-center gap-0.5">
+                            <MapPin className="w-3 h-3" />
+                            {event.venue}
+                          </span>
+                        )}
+                      </div>
+
+                      {event.description && (
+                        <button
+                          onClick={() => setExpandedId(isExpanded ? null : event.id)}
+                          className="flex items-center gap-1 text-xs text-amber-500 hover:text-amber-700 mt-1.5 transition-colors"
+                        >
+                          {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          {isExpanded ? 'Less' : 'More details'}
+                        </button>
+                      )}
+
+                      {isExpanded && event.description && (
+                        <p className="text-xs text-amber-700 mt-2 leading-relaxed bg-amber-50/60 rounded-lg p-2.5">
+                          {event.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-amber-50">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {event.source_url && (
+                        <a
+                          href={event.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-amber-500 hover:text-amber-700 transition-colors flex-shrink-0"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          Source
+                        </a>
+                      )}
+                      <span className="text-xs text-amber-300 truncate">{timeAgo(event.discovered_at)}</span>
+                    </div>
+
+                    {event.added_to_calendar ? (
+                      <span className="text-xs text-green-600 font-medium flex items-center gap-1 flex-shrink-0">
+                        <Plus className="w-3 h-3" /> Added
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          onAddToCalendar(event);
+                          markAdded(event.id);
+                        }}
+                        className="flex items-center gap-1.5 bg-amber-400 hover:bg-amber-500 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors flex-shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add to Calendar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             );
           })}
         </div>
+      )}
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
-          {loading && (
-            <div className="flex flex-col items-center justify-center py-16 gap-4">
-              <div className="w-12 h-12 border-3 border-amber-200 border-t-amber-400 rounded-full animate-spin" style={{borderWidth: '3px'}} />
-              <div className="text-center">
-                <p className="text-amber-900 font-medium text-sm">Searching for Malta events...</p>
-                <p className="text-amber-500 text-xs mt-1">Scanning concerts, theatre & more</p>
-              </div>
-            </div>
-          )}
-
-          {!loading && error === 'no_key' && (
-            <div className="p-6 text-center">
-              <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <AlertCircle className="w-7 h-7 text-amber-500" />
-              </div>
-              <h3 className="font-semibold text-amber-900 mb-2">Search not configured</h3>
-              <p className="text-sm text-amber-700 mb-4 leading-relaxed">
-                A Tavily API key is needed to search for Malta events. Add <code className="bg-amber-100 px-1 rounded text-xs">TAVILY_API_KEY</code> to your Supabase edge function secrets to enable live event discovery.
-              </p>
-            </div>
-          )}
-
-          {!loading && error && error !== 'no_key' && (
-            <div className="p-6 text-center">
-              <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-3" />
-              <p className="text-sm text-red-600">{error}</p>
-              <button
-                onClick={() => fetchEvents(true)}
-                className="mt-3 text-xs text-amber-600 underline"
-              >
-                Try again
-              </button>
-            </div>
-          )}
-
-          {!loading && !error && filtered.length === 0 && (
-            <div className="p-6 text-center">
-              <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Calendar className="w-7 h-7 text-amber-300" />
-              </div>
-              <p className="text-amber-800 font-medium text-sm">No events found yet</p>
-              <p className="text-amber-500 text-xs mt-1">Pull to refresh or check back later</p>
-            </div>
-          )}
-
-          {!loading && !error && filtered.length > 0 && (
-            <div className="p-4 space-y-3">
-              {filtered.map(event => {
-                const Icon = CATEGORY_ICONS[event.category] ?? Calendar;
-                const colorClass = CATEGORY_COLORS[event.category] ?? CATEGORY_COLORS.event;
-                const isExpanded = expandedId === event.id;
-
-                return (
-                  <div
-                    key={event.id}
-                    className={`bg-white rounded-xl border transition-all duration-200 ${
-                      event.added_to_calendar
-                        ? 'border-green-200 bg-green-50/30'
-                        : 'border-amber-100 hover:border-amber-200 hover:shadow-sm'
-                    }`}
-                  >
-                    <div className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center border ${colorClass}`}>
-                          <Icon className="w-4 h-4" />
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="font-semibold text-amber-900 text-sm leading-tight line-clamp-2">
-                              {event.title}
-                            </p>
-                            <button
-                              onClick={() => dismissEvent(event.id)}
-                              className="flex-shrink-0 p-1 text-amber-300 hover:text-amber-500 transition-colors"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                            {event.event_date_parsed && (
-                              <span className="text-xs text-amber-600 font-medium">
-                                {formatEventDate(event.event_date_parsed)}
-                              </span>
-                            )}
-                            {event.venue && (
-                              <span className="text-xs text-amber-500 flex items-center gap-0.5">
-                                <MapPin className="w-3 h-3" />
-                                {event.venue}
-                              </span>
-                            )}
-                          </div>
-
-                          {event.description && (
-                            <button
-                              onClick={() => setExpandedId(isExpanded ? null : event.id)}
-                              className="flex items-center gap-1 text-xs text-amber-500 hover:text-amber-700 mt-1.5 transition-colors"
-                            >
-                              {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                              {isExpanded ? 'Less' : 'More details'}
-                            </button>
-                          )}
-
-                          {isExpanded && event.description && (
-                            <p className="text-xs text-amber-700 mt-2 leading-relaxed bg-amber-50/60 rounded-lg p-2">
-                              {event.description}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-amber-50">
-                        <div className="flex items-center gap-2">
-                          {event.source_url && (
-                            <a
-                              href={event.source_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-xs text-amber-500 hover:text-amber-700 transition-colors"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                              Source
-                            </a>
-                          )}
-                          <span className="text-xs text-amber-300">{timeAgo(event.discovered_at)}</span>
-                        </div>
-
-                        {event.added_to_calendar ? (
-                          <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-                            <Plus className="w-3 h-3" /> Added
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              onAddToCalendar(event);
-                              markAdded(event.id);
-                            }}
-                            className="flex items-center gap-1.5 bg-amber-400 hover:bg-amber-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-                          >
-                            <Plus className="w-3 h-3" />
-                            Add to Calendar
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        {!loading && !error && (
-          <div className="px-5 py-3 border-t border-amber-100 bg-amber-50/40 flex-shrink-0">
-            <p className="text-xs text-amber-400 text-center">
-              Events sourced from the web — always verify details before attending
-            </p>
-          </div>
-        )}
-      </div>
+      {/* Footer note */}
+      {!loading && !error && filtered.length > 0 && (
+        <p className="text-xs text-amber-400 text-center mt-6">
+          Events sourced from the web - always verify details before attending
+        </p>
+      )}
     </div>
   );
 }

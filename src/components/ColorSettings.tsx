@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, EventTypeColor } from '../lib/supabase';
-import { X, Palette, Save } from 'lucide-react';
+import { Palette, Save } from 'lucide-react';
 
 const PRESET_COLORS = [
   { name: 'Amber', value: '#F59E0B' },
@@ -19,14 +19,14 @@ const PRESET_COLORS = [
 
 interface ColorSettingsProps {
   eventTypeColors: EventTypeColor[];
-  onClose: () => void;
   onSave: () => void;
 }
 
-export default function ColorSettings({ eventTypeColors, onClose, onSave }: ColorSettingsProps) {
+export default function ColorSettings({ eventTypeColors, onSave }: ColorSettingsProps) {
   const [colors, setColors] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     const colorMap: { [key: string]: string } = {};
@@ -38,6 +38,7 @@ export default function ColorSettings({ eventTypeColors, onClose, onSave }: Colo
 
   const handleColorChange = (eventType: string, color: string) => {
     setColors(prev => ({ ...prev, [eventType]: color }));
+    setSaved(false);
   };
 
   const handleSave = async () => {
@@ -61,8 +62,8 @@ export default function ColorSettings({ eventTypeColors, onClose, onSave }: Colo
         if (eventsError) throw eventsError;
       }
 
+      setSaved(true);
       onSave();
-      onClose();
     } catch (error: any) {
       setError(error.message);
     } finally {
@@ -71,81 +72,73 @@ export default function ColorSettings({ eventTypeColors, onClose, onSave }: Colo
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-500 text-white px-8 py-6 flex items-center justify-between rounded-t-3xl">
-          <div className="flex items-center gap-3">
-            <Palette className="w-7 h-7" />
-            <h2 className="text-3xl font-bold">Event Type Colors</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white/20 rounded-xl transition-all duration-200"
-          >
-            <X className="w-6 h-6" />
-          </button>
+    <div>
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <Palette className="w-5 h-5 text-amber-600" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-amber-900">Event Type Colors</h2>
+          <p className="text-sm text-amber-600">Set default colors for each event type</p>
+        </div>
+      </div>
+
+      <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-amber-200/50 shadow-sm p-4 sm:p-6">
+        <p className="text-sm text-amber-700/80 mb-5">
+          When you change a color, all existing events of that type will be updated to match.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {Object.entries(colors).map(([eventType, selectedColor]) => (
+            <div key={eventType} className="bg-amber-50/60 rounded-xl p-4 border border-amber-100">
+              <div className="flex items-center gap-3 mb-3">
+                <div
+                  className="w-8 h-8 rounded-lg shadow-sm flex-shrink-0"
+                  style={{ backgroundColor: selectedColor }}
+                />
+                <label htmlFor={`color-${eventType}`} className="text-sm font-bold text-amber-900">
+                  {eventType}
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {PRESET_COLORS.map(color => (
+                  <button
+                    key={color.value}
+                    onClick={() => handleColorChange(eventType, color.value)}
+                    className={`w-7 h-7 rounded-lg transition-all duration-200 transform active:scale-90 sm:hover:scale-110 ${
+                      selectedColor === color.value
+                        ? 'ring-2 ring-amber-400 ring-offset-1'
+                        : 'sm:hover:ring-1 sm:hover:ring-amber-300'
+                    }`}
+                    style={{ backgroundColor: color.value }}
+                    title={color.name}
+                    aria-label={color.name}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
 
-        <div className="p-8">
-          <p className="text-gray-600 mb-6">
-            Set default colors for each event type. When you change a color, all existing events of that type will be updated to match.
-          </p>
-
-          <div className="space-y-4">
-            {Object.entries(colors).map(([eventType, selectedColor]) => (
-              <div key={eventType} className="bg-gray-50 rounded-xl p-4">
-                <div className="flex items-center gap-4">
-                  <div
-                    className="w-10 h-10 rounded-lg shadow-md flex-shrink-0"
-                    style={{ backgroundColor: selectedColor }}
-                  />
-                  <div className="flex-1">
-                    <label htmlFor={`color-${eventType}`} className="text-base font-bold text-gray-800 block mb-1">
-                      {eventType}
-                    </label>
-                  </div>
-                  <select
-                    id={`color-${eventType}`}
-                    value={selectedColor}
-                    onChange={(e) => handleColorChange(eventType, e.target.value)}
-                    className="px-4 py-2.5 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition-all duration-200 font-medium"
-                  >
-                    {PRESET_COLORS.map(color => (
-                      <option key={color.value} value={color.value}>
-                        {color.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            ))}
+        {error && (
+          <div className="mt-5 bg-red-50/80 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">
+            {error}
           </div>
+        )}
 
-          {error && (
-            <div className="mt-6 bg-red-50 border-2 border-red-200 text-red-700 px-5 py-4 rounded-xl text-sm font-medium">
-              {error}
-            </div>
+        <div className="mt-6 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={loading}
+            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-500 hover:to-yellow-600 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
+          >
+            <Save className="w-5 h-5" />
+            {loading ? 'Saving...' : 'Save Colors'}
+          </button>
+          {saved && (
+            <span className="text-sm text-green-600 font-medium animate-fadeIn">Saved!</span>
           )}
-
-          <div className="flex gap-3 pt-6 mt-6 border-t-2 border-gray-200">
-            <div className="flex-1" />
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-6 py-3.5 border-2 border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-xl transition-all duration-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={loading}
-              className="flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-white font-bold rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-            >
-              <Save className="w-5 h-5" />
-              {loading ? 'Saving...' : 'Save Colors'}
-            </button>
-          </div>
         </div>
       </div>
     </div>

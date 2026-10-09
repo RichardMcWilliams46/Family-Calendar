@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import Auth from './components/Auth';
 import Calendar from './components/Calendar';
+import Sunflower from './components/Sunflower';
 import type { User } from '@supabase/supabase-js';
 
 function App() {
@@ -27,14 +28,16 @@ function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50/80 via-yellow-50/60 to-orange-50/40 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-14 w-14 border-4 border-amber-200 border-t-amber-500"></div>
+          <div className="inline-block animate-pulse">
+            <Sunflower size={72} day={new Date().getDate()} />
+          </div>
           <p className="mt-6 text-amber-800 font-semibold text-lg">Loading...</p>
         </div>
       </div>
     );
   }
 
-  return user ? <Calendar /> : <Auth />;
+  return user ? <Calendar user={user} /> : <Auth />;
 }
 
 export default App;
