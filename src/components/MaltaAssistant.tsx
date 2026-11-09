@@ -85,18 +85,29 @@ export default function MaltaAssistant({ onAddToCalendar }: Props) {
         }
       );
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
-      if (json.error && json.error === 'TAVILY_API_KEY not configured') {
-        setError('no_key');
-      } else if (json.error) {
-        setError(json.error);
-      } else {
-        setEvents(json.events ?? []);
-        setNewCount(json.new_count ?? 0);
+      if (!res.ok) {
+        throw new Error('Search request failed');
       }
-    } catch (e) {
-      setError(String(e));
+
+      if (!json || typeof json !== 'object') {
+        throw new Error('Invalid search response');
+      }
+
+      const response = json as { error?: unknown; events?: unknown; new_count?: unknown };
+      if (response.error === 'TAVILY_API_KEY not configured') {
+        setError('no_key');
+      } else if (typeof response.error === 'string') {
+        setError('The Malta event search is temporarily unavailable.');
+      } else if (Array.isArray(response.events)) {
+        setEvents(response.events as DiscoveredEvent[]);
+        setNewCount(typeof response.new_count === 'number' ? response.new_count : 0);
+      } else {
+        throw new Error('Invalid search response');
+      }
+    } catch {
+      setError('The Malta event search is temporarily unavailable.');
     } finally {
       setLoading(false);
       setRefreshing(false);

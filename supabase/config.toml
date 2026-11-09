@@ -1,0 +1,2 @@
+[functions.malta-events-search]
+verify_jwt = true

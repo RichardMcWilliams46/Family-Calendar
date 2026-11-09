@@ -23,6 +23,7 @@ export default function Calendar({ user }: { user: User }) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'events-holidays'>('events-holidays');
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     loadEvents();
@@ -58,7 +59,15 @@ export default function Calendar({ user }: { user: User }) {
       .from('calendar_events')
       .select('*')
       .order('start_date', { ascending: true });
-    if (!error && data) setEvents(data);
+    if (error) {
+      setLoadError(true);
+      return;
+    }
+
+    if (data) {
+      setEvents(data);
+      setLoadError(false);
+    }
   };
 
   const loadEventTypeColors = async () => {
@@ -66,7 +75,12 @@ export default function Calendar({ user }: { user: User }) {
       .from('event_type_colors')
       .select('*')
       .order('event_type', { ascending: true });
-    if (!error && data) setEventTypeColors(data);
+    if (error) {
+      setLoadError(true);
+      return;
+    }
+
+    if (data) setEventTypeColors(data);
   };
 
   const getDaysInMonth = (date: Date) => {
@@ -144,6 +158,22 @@ export default function Calendar({ user }: { user: User }) {
       monthLabel={monthLabel}
       showFAB={showFAB}
     >
+      {loadError && (
+        <div className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+          <span>We could not load the latest calendar data.</span>
+          <button
+            type="button"
+            onClick={() => {
+              loadEvents();
+              loadEventTypeColors();
+            }}
+            className="font-semibold underline underline-offset-2"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
       {/* ===== Calendar Grid Tab ===== */}
       {activeTab === 'calendar' && (
         <div>

@@ -1,34 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase, CalendarEvent, EventTypeColor } from '../lib/supabase';
+import { DEFAULT_EVENT_COLOR, EVENT_TYPES, PRESET_COLORS } from '../lib/event-config';
 import { X, Calendar, Clock, Tag, Palette, Trash2, Repeat, Link, FileText, CalendarClock, AlertCircle } from 'lucide-react';
-
-const EVENT_TYPES = [
-  'Event',
-  'Holiday',
-  'Maltese Bank Holiday',
-  'Birthday',
-  'Anniversary',
-  'Appointment',
-  'Meeting',
-  'Reminder',
-  'Travel',
-  'Other'
-];
-
-const COLORS = [
-  { name: 'Yellow', value: '#EAB308' },
-  { name: 'Amber', value: '#F59E0B' },
-  { name: 'Orange', value: '#F97316' },
-  { name: 'Terracotta', value: '#C2410C' },
-  { name: 'Red', value: '#DC2626' },
-  { name: 'Pink', value: '#EC4899' },
-  { name: 'Coral', value: '#FB7185' },
-  { name: 'Blue', value: '#0EA5E9' },
-  { name: 'Teal', value: '#14B8A6' },
-  { name: 'Green', value: '#10B981' },
-  { name: 'Emerald', value: '#059669' },
-  { name: 'Lime', value: '#84CC16' },
-];
 
 interface EventModalProps {
   selectedDate: Date | null;
@@ -58,7 +31,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
   const [endTime, setEndTime] = useState('10:00');
   const [allDay, setAllDay] = useState(false);
   const [eventType, setEventType] = useState('Event');
-  const [color, setColor] = useState('#F59E0B');
+  const [color, setColor] = useState(DEFAULT_EVENT_COLOR);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceRule, setRecurrenceRule] = useState('daily');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
@@ -107,7 +80,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
       setStartDate(dateStr);
       setEndDate(dateStr);
 
-      const defaultColor = eventTypeColors.find(etc => etc.event_type === 'Event')?.color || '#F59E0B';
+      const defaultColor = eventTypeColors.find(etc => etc.event_type === 'Event')?.color || DEFAULT_EVENT_COLOR;
       setColor(defaultColor);
     }
   }, [selectedEvent, selectedDate, eventTypeColors]);
@@ -117,7 +90,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
     if (typeColor && !selectedEvent) {
       setColor(typeColor.color);
     }
-  }, [eventType, eventTypeColors]);
+  }, [eventType, eventTypeColors, selectedEvent]);
 
   // ===== Inline validation =====
   const endTimeBeforeStart = useMemo(() => {
@@ -184,9 +157,6 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
     setSubmissionBlocked(false);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
       const startDateTime = allDay
         ? new Date(startDate + 'T00:00:00').toISOString()
         : new Date(startDate + 'T' + startTime).toISOString();
@@ -204,7 +174,6 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
         all_day: allDay,
         event_type: eventType,
         color,
-        created_by: user.id,
         is_recurring: isRecurring,
         recurrence_rule: isRecurring ? recurrenceRule : null,
         recurrence_end_date: isRecurring && recurrenceEndDate ? new Date(recurrenceEndDate + 'T23:59:59').toISOString() : null,
@@ -233,15 +202,15 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
 
       onSave();
       onClose();
-    } catch (error: any) {
-      setError(error.message);
+    } catch {
+      setError('Could not save this event. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const generateRecurringEvents = async (parentEvent: CalendarEvent) => {
-    const recurrences: any[] = [];
+    const recurrences: Record<string, string | boolean | null>[] = [];
     const startDate = new Date(parentEvent.start_date);
     const endDate = new Date(parentEvent.end_date);
     const recEndDate = parentEvent.recurrence_end_date ? new Date(parentEvent.recurrence_end_date) : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000);
@@ -304,15 +273,15 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
 
       onSave();
       onClose();
-    } catch (error: any) {
-      setError(error.message);
+    } catch {
+      setError('Could not delete this event. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
 
-  const selectedColorName = COLORS.find(c => c.value === color)?.name ?? '';
+  const selectedColorName = PRESET_COLORS.find(c => c.value === color)?.name ?? '';
 
 
   return (
@@ -598,7 +567,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
                   Color {selectedColorName && <span className="text-amber-400 font-normal">-- {selectedColorName}</span>}
                 </label>
                 <div className="flex flex-wrap gap-2 sm:gap-3">
-                  {COLORS.map(c => (
+                  {PRESET_COLORS.map(c => (
                     <button
                       key={c.value}
                       type="button"

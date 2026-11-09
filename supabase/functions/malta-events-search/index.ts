@@ -29,22 +29,24 @@ interface DiscoveredEvent {
   source_title: string;
 }
 
-const CATEGORY_QUERIES = [
-  { query: "site:whatson.com.mt events 2026", category: "event" },
-  { query: "site:showshappening.com Malta events 2026", category: "event" },
-  { query: "site:visitmalta.com events things to do 2026", category: "event" },
-  { query: "site:lovinmalta.com events things to do 2026", category: "event" },
-  { query: "site:ticketline.com.mt concerts shows 2026", category: "concert" },
-  { query: "whatson.com.mt Malta concerts theatre festival 2026", category: "concert" },
-  { query: "ticketline.com.mt Malta live music theatre 2026", category: "theatre" },
-];
+function getCategoryQueries(year: number) {
+  return [
+    { query: `site:whatson.com.mt events ${year}`, category: "event" },
+    { query: `site:showshappening.com Malta events ${year}`, category: "event" },
+    { query: `site:visitmalta.com events things to do ${year}`, category: "event" },
+    { query: `site:lovinmalta.com events things to do ${year}`, category: "event" },
+    { query: `site:ticketline.com.mt concerts shows ${year}`, category: "concert" },
+    { query: `whatson.com.mt Malta concerts theatre festival ${year}`, category: "concert" },
+    { query: `ticketline.com.mt Malta live music theatre ${year}`, category: "theatre" },
+  ];
+}
 
 function extractDateFromText(text: string): string | null {
   // Try to find date patterns like "12 June 2026", "June 12 2026", "2026-06-12"
   const patterns = [
-    /\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(202[5-9])\b/i,
-    /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(202[5-9])\b/i,
-    /\b(202[5-9])-(\d{2})-(\d{2})\b/,
+    /\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})\b/i,
+    /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(20\d{2})\b/i,
+    /\b(20\d{2})-(\d{2})-(\d{2})\b/,
   ];
 
   const monthMap: Record<string, string> = {
@@ -207,7 +209,8 @@ Deno.serve(async (req: Request) => {
     // Search Tavily for each category
     const allNewEvents: DiscoveredEvent[] = [];
 
-    for (const { query, category } of CATEGORY_QUERIES) {
+    const currentYear = new Date().getUTCFullYear();
+    for (const { query, category } of getCategoryQueries(currentYear)) {
       try {
         const tavilyRes = await fetch("https://api.tavily.com/search", {
           method: "POST",

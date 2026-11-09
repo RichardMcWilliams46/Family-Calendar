@@ -29,8 +29,8 @@ export default function Auth() {
         });
         if (error) throw error;
       }
-    } catch (error: any) {
-      setError(error.message);
+    } catch {
+      setError('We could not complete that request. Check your details and try again.');
     } finally {
       setLoading(false);
     }
