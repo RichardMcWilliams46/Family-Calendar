@@ -173,18 +173,41 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
           .eq('id', selectedEvent.id);
 
         if (error) throw error;
+      } else if (isRecurring) {
+        const occurrences = buildOccurrences(
+          startDateTime,
+          endDateTime,
+          recurrenceRule,
+          recurrenceEndDate,
+          { title, description, hyperlink: hyperlink || null, all_day: allDay, event_type: eventType, color },
+        );
+
+        const { error: rpcError } = await supabase
+          .rpc('create_recurring_event', {
+            p_payload: {
+              title,
+              description,
+              hyperlink: hyperlink || null,
+              start_date: startDateTime,
+              end_date: endDateTime,
+              all_day: allDay,
+              event_type: eventType,
+              color,
+              recurrence_rule: recurrenceRule,
+              recurrence_end_date: recurrenceEndDate
+                ? new Date(recurrenceEndDate + 'T23:59:59').toISOString()
+                : null,
+            } as unknown as Record<string, unknown>,
+            p_occurrences: occurrences as unknown as unknown[],
+          });
+
+        if (rpcError) throw rpcError;
       } else {
-        const { data: newEvent, error: insertError } = await supabase
+        const { error: insertError } = await supabase
           .from('calendar_events')
-          .insert([eventData])
-          .select()
-          .single();
+          .insert([eventData]);
 
         if (insertError) throw insertError;
-
-        if (isRecurring && newEvent) {
-          await generateRecurringEvents(newEvent);
-        }
       }
 
       onSave();
@@ -196,42 +219,44 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
     }
   };
 
-  const generateRecurringEvents = async (parentEvent: CalendarEvent) => {
+  const buildOccurrences = (
+    startISO: string,
+    endISO: string,
+    rule: string,
+    recEndDateStr: string,
+    fields: { title: string; description: string; hyperlink: string | null; all_day: boolean; event_type: string; color: string },
+  ): Record<string, string | boolean | null>[] => {
     const recurrences: Record<string, string | boolean | null>[] = [];
-    const startDate = new Date(parentEvent.start_date);
-    const endDate = new Date(parentEvent.end_date);
-    const recEndDate = parentEvent.recurrence_end_date
-      ? new Date(parentEvent.recurrence_end_date)
-      : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000);
+    const start = new Date(startISO);
+    const end = new Date(endISO);
+    const recEndDate = recEndDateStr
+      ? new Date(recEndDateStr + 'T23:59:59')
+      : new Date(start.getTime() + 365 * 24 * 60 * 60 * 1000);
 
-    const duration = endDate.getTime() - startDate.getTime();
+    const duration = end.getTime() - start.getTime();
     const MAX_RECURRENCES = 366;
-    let currentDate = new Date(startDate);
+    let current = new Date(start);
 
-    while (currentDate <= recEndDate && recurrences.length < MAX_RECURRENCES) {
-      const rule = parentEvent.recurrence_rule as 'daily' | 'weekly' | 'monthly' | 'yearly';
-      currentDate = advanceRecurrence(currentDate, rule);
+    while (current <= recEndDate && recurrences.length < MAX_RECURRENCES) {
+      current = advanceRecurrence(current, rule as 'daily' | 'weekly' | 'monthly' | 'yearly');
 
-      if (currentDate <= recEndDate) {
-        const recEndDateTime = new Date(currentDate.getTime() + duration);
+      if (current <= recEndDate) {
         recurrences.push({
-          title: parentEvent.title,
-          description: parentEvent.description,
-          hyperlink: parentEvent.hyperlink,
-          start_date: currentDate.toISOString(),
-          end_date: recEndDateTime.toISOString(),
-          all_day: parentEvent.all_day,
-          event_type: parentEvent.event_type,
-          color: parentEvent.color,
+          title: fields.title,
+          description: fields.description,
+          hyperlink: fields.hyperlink,
+          start_date: current.toISOString(),
+          end_date: new Date(current.getTime() + duration).toISOString(),
+          all_day: fields.all_day,
+          event_type: fields.event_type,
+          color: fields.color,
           is_recurring: false,
-          parent_event_id: parentEvent.id,
+          parent_event_id: null,
         });
       }
     }
 
-    if (recurrences.length > 0) {
-      await supabase.from('calendar_events').insert(recurrences);
-    }
+    return recurrences;
   };
 
   const handleDelete = async () => {

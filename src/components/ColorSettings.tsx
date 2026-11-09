@@ -34,18 +34,12 @@ export default function ColorSettings({ eventTypeColors, onSave }: ColorSettings
     try {
       for (const [eventType, color] of Object.entries(colors)) {
         const { error } = await supabase
-          .from('event_type_colors')
-          .update({ color, updated_at: new Date().toISOString() })
-          .eq('event_type', eventType);
+          .rpc('update_event_type_color', {
+            p_event_type: eventType,
+            p_new_color: color,
+          });
 
         if (error) throw error;
-
-        const { error: eventsError } = await supabase
-          .from('calendar_events')
-          .update({ color })
-          .eq('event_type', eventType);
-
-        if (eventsError) throw eventsError;
       }
 
       setSaved(true);

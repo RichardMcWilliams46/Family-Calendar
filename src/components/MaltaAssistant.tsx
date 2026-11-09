@@ -119,12 +119,20 @@ export default function MaltaAssistant({ onAddToCalendar }: Props) {
   }, [fetchEvents]);
 
   const dismissEvent = async (id: string) => {
-    await supabase.from('discovered_events').update({ dismissed: true }).eq('id', id);
+    const { error } = await supabase.from('discovered_events').update({ dismissed: true }).eq('id', id);
+    if (error) {
+      setError('Could not dismiss this event. Please try again.');
+      return;
+    }
     setEvents(prev => prev.filter(e => e.id !== id));
   };
 
   const markAdded = async (id: string) => {
-    await supabase.from('discovered_events').update({ added_to_calendar: true }).eq('id', id);
+    const { error } = await supabase.from('discovered_events').update({ added_to_calendar: true }).eq('id', id);
+    if (error) {
+      setError('Could not mark this event as added. Please try again.');
+      return;
+    }
     setEvents(prev => prev.map(e => e.id === id ? { ...e, added_to_calendar: true } : e));
   };
 
