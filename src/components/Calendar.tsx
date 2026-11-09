@@ -7,6 +7,7 @@ import EventModal from './EventModal';
 import EventList from './EventList';
 import MaltaAssistant from './MaltaAssistant';
 import SettingsScreen from './SettingsScreen';
+import { toCalendarDate, isDateInRange } from '../lib/date-utils';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -100,18 +101,10 @@ export default function Calendar({ user }: { user: User }) {
 
   const getEventsForDate = (date: Date | null) => {
     if (!date) return [];
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const day = date.getDate();
-    const localDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
-    return events.filter(event => {
-      const s = new Date(event.start_date);
-      const e = new Date(event.end_date);
-      const startStr = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, '0')}-${String(s.getDate()).padStart(2, '0')}`;
-      const endStr = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`;
-      return localDateStr >= startStr && localDateStr <= endStr;
-    });
+    const dateKey = toCalendarDate(date);
+    return events.filter(event =>
+      isDateInRange(dateKey, event.start_date, event.end_date),
+    );
   };
 
   const handlePreviousMonth = () =>

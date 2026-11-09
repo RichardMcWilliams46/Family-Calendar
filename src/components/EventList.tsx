@@ -1,5 +1,6 @@
 import { CalendarEvent } from '../lib/supabase';
 import { Calendar, Clock, Tag, ExternalLink } from 'lucide-react';
+import { formatHumanDate, formatHumanTime, isMultiDay } from '../lib/date-utils';
 
 interface EventListProps {
   events: CalendarEvent[];
@@ -13,25 +14,6 @@ const isHolidayOrEvent = (eventType: string) =>
   eventType === 'Holiday' || eventType === 'Event';
 
 export default function EventList({ events, onEventClick, currentDate, filterType, onFilterChange }: EventListProps) {
-  const formatDate = (dateStr: string, includeYear: boolean = true) => {
-    const date = new Date(dateStr);
-    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-    if (includeYear) options.year = 'numeric';
-    return date.toLocaleDateString('en-US', options);
-  };
-
-  const shouldShowYear = (startDate: string, endDate: string) => {
-    return new Date(startDate).getFullYear() !== new Date(endDate).getFullYear();
-  };
-
-  const formatTime = (dateStr: string) => {
-    return new Date(dateStr).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-  };
-
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
@@ -100,7 +82,7 @@ export default function EventList({ events, onEventClick, currentDate, filterTyp
       ) : (
         <div className="space-y-2.5">
           {filteredEvents.map(event => {
-            const showYear = shouldShowYear(event.start_date, event.end_date);
+            const showYear = new Date(event.start_date).getFullYear() !== new Date(event.end_date).getFullYear();
             return (
               <div
                 key={event.id}
@@ -133,15 +115,15 @@ export default function EventList({ events, onEventClick, currentDate, filterTyp
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-amber-500" />
                         <span>
-                          {formatDate(event.start_date, showYear)}
-                          {event.start_date.split('T')[0] !== event.end_date.split('T')[0] &&
-                            ` - ${formatDate(event.end_date, showYear)}`}
+                          {formatHumanDate(event.start_date, showYear)}
+                          {isMultiDay(event.start_date, event.end_date) &&
+                            ` - ${formatHumanDate(event.end_date, showYear)}`}
                         </span>
                       </div>
                       {!event.all_day && (
                         <div className="flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-amber-500" />
-                          <span>{formatTime(event.start_date)} - {formatTime(event.end_date)}</span>
+                          <span>{formatHumanTime(event.start_date)} - {formatHumanTime(event.end_date)}</span>
                         </div>
                       )}
                       {!(filterType === 'events-holidays' && isHolidayOrEvent(event.event_type)) && (

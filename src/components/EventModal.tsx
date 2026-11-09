@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase, CalendarEvent, EventTypeColor } from '../lib/supabase';
 import { DEFAULT_EVENT_COLOR, EVENT_TYPES, PRESET_COLORS } from '../lib/event-config';
+import { toDateInputValue, toTimeInputValue, advanceRecurrence } from '../lib/date-utils';
 import { X, Calendar, Clock, Tag, Palette, Trash2, Repeat, Link, FileText, CalendarClock, AlertCircle } from 'lucide-react';
 
 interface EventModalProps {
@@ -48,17 +49,10 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
       const start = new Date(selectedEvent.start_date);
       const end = new Date(selectedEvent.end_date);
 
-      const startYear = start.getFullYear();
-      const startMonth = String(start.getMonth() + 1).padStart(2, '0');
-      const startDay = String(start.getDate()).padStart(2, '0');
-      setStartDate(`${startYear}-${startMonth}-${startDay}`);
-      setStartTime(start.toTimeString().slice(0, 5));
-
-      const endYear = end.getFullYear();
-      const endMonth = String(end.getMonth() + 1).padStart(2, '0');
-      const endDay = String(end.getDate()).padStart(2, '0');
-      setEndDate(`${endYear}-${endMonth}-${endDay}`);
-      setEndTime(end.toTimeString().slice(0, 5));
+      setStartDate(toDateInputValue(start));
+      setStartTime(toTimeInputValue(start));
+      setEndDate(toDateInputValue(end));
+      setEndTime(toTimeInputValue(end));
 
       setAllDay(selectedEvent.all_day);
       setEventType(selectedEvent.event_type);
@@ -66,17 +60,10 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
       setIsRecurring(selectedEvent.is_recurring);
       setRecurrenceRule(selectedEvent.recurrence_rule || 'daily');
       if (selectedEvent.recurrence_end_date) {
-        const recEnd = new Date(selectedEvent.recurrence_end_date);
-        const recEndYear = recEnd.getFullYear();
-        const recEndMonth = String(recEnd.getMonth() + 1).padStart(2, '0');
-        const recEndDay = String(recEnd.getDate()).padStart(2, '0');
-        setRecurrenceEndDate(`${recEndYear}-${recEndMonth}-${recEndDay}`);
+        setRecurrenceEndDate(toDateInputValue(new Date(selectedEvent.recurrence_end_date)));
       }
     } else if (selectedDate) {
-      const year = selectedDate.getFullYear();
-      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-      const day = String(selectedDate.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
+      const dateStr = toDateInputValue(selectedDate);
       setStartDate(dateStr);
       setEndDate(dateStr);
 
@@ -213,27 +200,17 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
     const recurrences: Record<string, string | boolean | null>[] = [];
     const startDate = new Date(parentEvent.start_date);
     const endDate = new Date(parentEvent.end_date);
-    const recEndDate = parentEvent.recurrence_end_date ? new Date(parentEvent.recurrence_end_date) : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000);
+    const recEndDate = parentEvent.recurrence_end_date
+      ? new Date(parentEvent.recurrence_end_date)
+      : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000);
 
     const duration = endDate.getTime() - startDate.getTime();
-
+    const MAX_RECURRENCES = 366;
     let currentDate = new Date(startDate);
 
-    while (currentDate <= recEndDate) {
-      switch (parentEvent.recurrence_rule) {
-        case 'daily':
-          currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
-          break;
-        case 'weekly':
-          currentDate = new Date(currentDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-          break;
-        case 'monthly':
-          currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, currentDate.getDate());
-          break;
-        case 'yearly':
-          currentDate = new Date(currentDate.getFullYear() + 1, currentDate.getMonth(), currentDate.getDate());
-          break;
-      }
+    while (currentDate <= recEndDate && recurrences.length < MAX_RECURRENCES) {
+      const rule = parentEvent.recurrence_rule as 'daily' | 'weekly' | 'monthly' | 'yearly';
+      currentDate = advanceRecurrence(currentDate, rule);
 
       if (currentDate <= recEndDate) {
         const recEndDateTime = new Date(currentDate.getTime() + duration);
@@ -246,7 +223,6 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
           all_day: parentEvent.all_day,
           event_type: parentEvent.event_type,
           color: parentEvent.color,
-          created_by: parentEvent.created_by,
           is_recurring: false,
           parent_event_id: parentEvent.id,
         });
