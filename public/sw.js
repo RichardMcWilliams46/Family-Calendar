@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sunflower-calendar-v1';
+const CACHE_NAME = 'sunflower-calendar-v3';
 const urlsToCache = [
   '/Family-Calendar/',
   '/Family-Calendar/index.html'
@@ -8,27 +8,29 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(urlsToCache))
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+
   event.respondWith(
     caches.match(event.request)
-      .then((response) => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request).then((response) => {
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
+      .then((cachedResponse) => {
+        const fetchPromise = fetch(event.request).then((networkResponse) => {
+          if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+            return networkResponse;
           }
-          const responseToCache = response.clone();
+          const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME)
             .then((cache) => {
               cache.put(event.request, responseToCache);
             });
-          return response;
-        });
+          return networkResponse;
+        }).catch(() => cachedResponse);
+
+        return cachedResponse || fetchPromise;
       })
   );
 });
@@ -42,8 +44,9 @@ self.addEventListener('activate', (event) => {
           if (cacheWhitelist.indexOf(cacheName) === -1) {
             return caches.delete(cacheName);
           }
+          return undefined;
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });

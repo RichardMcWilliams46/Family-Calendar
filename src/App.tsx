@@ -26,7 +26,7 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-dvh bg-gradient-to-br from-amber-50/80 via-yellow-50/60 to-orange-50/40 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-amber-50/80 via-yellow-50/60 to-orange-50/40 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-pulse">
             <Sunflower size={72} day={new Date().getDate()} />
