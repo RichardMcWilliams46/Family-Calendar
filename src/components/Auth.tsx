@@ -37,7 +37,7 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50/80 via-yellow-50/60 to-orange-50/40 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-dvh w-full flex items-center justify-center bg-gradient-to-br from-amber-100/60 via-yellow-50/40 to-orange-50/30 p-4 relative overflow-hidden">
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxjaXJjbGUgY3g9IjQwIiBjeT0iNDAiIHI9IjgiIHN0cm9rZT0iI0ZCQ0Y0QSIgc3Ryb2tlLXdpZHRoPSIxIiBvcGFjaXR5PSIwLjMiLz48L2c+PC9zdmc+')] opacity-40"></div>
 
       <Sunflower className="absolute top-10 left-10 opacity-20 rotate-12 hidden lg:block" size={100} />

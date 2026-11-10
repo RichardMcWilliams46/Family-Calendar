@@ -31,18 +31,18 @@ function MonthNav({
   onNext: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between mb-5">
+    <div className="flex items-center justify-between mb-4 sm:mb-5">
       <button
         onClick={onPrev}
-        className="flex items-center gap-1 px-3 py-2 text-amber-700 hover:bg-amber-100/60 rounded-lg transition-colors text-sm font-medium"
+        className="flex items-center gap-1 px-3 py-2.5 text-amber-700 hover:bg-amber-100/60 active:bg-amber-200/60 rounded-xl transition-colors text-sm font-medium touch-manipulation"
       >
         <ChevronLeft className="w-5 h-5" />
         <span className="hidden sm:inline">Previous</span>
       </button>
-      <h2 className="text-lg sm:text-xl font-bold text-amber-900">{label}</h2>
+      <h2 className="text-base sm:text-xl font-bold text-amber-900">{label}</h2>
       <button
         onClick={onNext}
-        className="flex items-center gap-1 px-3 py-2 text-amber-700 hover:bg-amber-100/60 rounded-lg transition-colors text-sm font-medium"
+        className="flex items-center gap-1 px-3 py-2.5 text-amber-700 hover:bg-amber-100/60 active:bg-amber-200/60 rounded-xl transition-colors text-sm font-medium touch-manipulation"
       >
         <span className="hidden sm:inline">Next</span>
         <ChevronRight className="w-5 h-5" />
@@ -271,7 +271,7 @@ export default function Calendar({ user }: { user: User }) {
                     <div
                       key={index}
                       onClick={() => handleDateClick(day)}
-                      className={`min-h-[80px] sm:min-h-[110px] lg:min-h-[120px] p-1.5 sm:p-2 transition-all ${
+                      className={`min-h-[68px] sm:min-h-[110px] lg:min-h-[120px] p-1 sm:p-2 transition-all ${
                         day
                           ? isToday(day)
                             ? 'bg-amber-100/60 cursor-pointer hover:bg-amber-100'
@@ -283,7 +283,7 @@ export default function Calendar({ user }: { user: User }) {
                     >
                       {day && (
                         <>
-                          <div className={`text-xs sm:text-sm font-medium mb-1 flex items-center justify-center w-6 h-6 rounded-full ${
+                          <div className={`text-[11px] sm:text-sm font-medium mb-0.5 sm:mb-1 flex items-center justify-center w-6 h-6 rounded-full ${
                             isToday(day)
                               ? 'bg-gradient-to-br from-amber-400 to-yellow-500 text-white shadow-sm'
                               : 'text-amber-900'
@@ -295,14 +295,14 @@ export default function Calendar({ user }: { user: User }) {
                               <div
                                 key={event.id}
                                 onClick={(e) => handleEventClick(event, e)}
-                                className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded truncate hover:opacity-80 transition-opacity font-medium shadow-sm"
+                                className="text-[9px] sm:text-xs px-1 sm:px-2 py-0.5 rounded truncate hover:opacity-80 transition-opacity font-medium shadow-sm"
                                 style={{ backgroundColor: event.color, color: 'white' }}
                               >
                                 {event.title}
                               </div>
                             ))}
                             {dayEvents.length > 2 && (
-                              <div className="text-[10px] sm:text-xs text-amber-600 px-1.5 sm:px-2 font-medium">
+                              <div className="text-[9px] sm:text-xs text-amber-600 px-1 sm:px-2 font-medium">
                                 +{dayEvents.length - 2}
                               </div>
                             )}

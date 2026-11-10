@@ -24,13 +24,16 @@
   .safe-area-right {
     padding-right: env(safe-area-inset-right);
   }
-  .pb-nav {
-    padding-bottom: calc(env(safe-area-inset-bottom) + 4.5rem);
+  .h-dvh {
+    height: 100vh;
+    height: 100dvh;
   }
-  @media (min-width: 1024px) {
-    .pb-nav {
-      padding-bottom: 0;
-    }
+  .min-h-dvh {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  .pb-nav {
+    padding-bottom: 1.5rem;
   }
 }
 
