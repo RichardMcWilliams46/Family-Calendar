@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, CalendarEvent, EventTypeColor } from '../lib/supabase';
-import { DEFAULT_EVENT_COLOR, EVENT_TYPES, PRESET_COLORS } from '../lib/event-config';
+import { DEFAULT_EVENT_COLOR, EVENT_TYPES } from '../lib/event-config';
 import { toDateInputValue, toTimeInputValue, advanceRecurrence } from '../lib/date-utils';
-import { X, Calendar, Clock, Tag, Palette, Trash2, Repeat, Link, FileText, CalendarClock, AlertCircle, Plus } from 'lucide-react';
+import { X, Calendar, Clock, Tag, Trash2, Repeat, Link, FileText, CalendarClock, AlertCircle, Plus } from 'lucide-react';
 
 interface OccurrenceRow {
   title: string;
@@ -93,7 +93,6 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
   const [endTime, setEndTime] = useState('10:00');
   const [allDay, setAllDay] = useState(false);
   const [eventType, setEventType] = useState('Event');
-  const [color, setColor] = useState(DEFAULT_EVENT_COLOR);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceRule, setRecurrenceRule] = useState('daily');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
@@ -132,7 +131,6 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
 
       setAllDay(selectedEvent.all_day);
       setEventType(selectedEvent.event_type);
-      setColor(selectedEvent.color);
       setIsRecurring(selectedEvent.is_recurring);
       setRecurrenceRule(selectedEvent.recurrence_rule || 'daily');
       const recEnd = selectedEvent.recurrence_end_date
@@ -160,28 +158,16 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
 
       originalRecurrence.current = null;
 
-
-
       if (selectedDate) {
         const dateStr = toDateInputValue(selectedDate);
         setStartDate(dateStr);
         setEndDate(dateStr);
-        const defaultColor = eventTypeColors.find(etc => etc.event_type === 'Event')?.color || DEFAULT_EVENT_COLOR;
-        setColor(defaultColor);
       } else {
         setStartDate('');
         setEndDate('');
-        setColor(DEFAULT_EVENT_COLOR);
       }
     }
   }, [selectedEvent, selectedDate, eventTypeColors]);
-
-  useEffect(() => {
-    const typeColor = eventTypeColors.find(etc => etc.event_type === eventType);
-    if (typeColor && !selectedEvent) {
-      setColor(typeColor.color);
-    }
-  }, [eventType, eventTypeColors, selectedEvent]);
 
   // ===== Inline validation =====
   const endTimeBeforeStart = useMemo(() => {
@@ -288,6 +274,8 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
         ? new Date(endDate + 'T23:59:59').toISOString()
         : new Date(endDate + 'T' + endTime).toISOString();
 
+      const resolvedColor = eventTypeColors.find(etc => etc.event_type === eventType)?.color || DEFAULT_EVENT_COLOR;
+
       const eventData = {
         title,
         description,
@@ -296,7 +284,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
         end_date: endDateTime,
         all_day: allDay,
         event_type: eventType,
-        color,
+        color: resolvedColor,
         is_recurring: isRecurring,
         recurrence_rule: isRecurring ? recurrenceRule : null,
         recurrence_end_date: isRecurring && recurrenceEndDate ? new Date(recurrenceEndDate + 'T23:59:59').toISOString() : null,
@@ -316,7 +304,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
             endDateTime,
             recurrenceRule,
             recurrenceEndDate,
-            { title, description, hyperlink: hyperlink || null, all_day: allDay, event_type: eventType, color },
+            { title, description, hyperlink: hyperlink || null, all_day: allDay, event_type: eventType, color: resolvedColor },
           );
 
           const { error: rpcError } = await supabase
@@ -329,7 +317,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
                 end_date: endDateTime,
                 all_day: allDay,
                 event_type: eventType,
-                color,
+                color: resolvedColor,
                 recurrence_rule: recurrenceRule,
                 recurrence_end_date: recurrenceEndDate
                   ? new Date(recurrenceEndDate + 'T23:59:59').toISOString()
@@ -362,7 +350,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
           endDateTime,
           recurrenceRule,
           recurrenceEndDate,
-          { title, description, hyperlink: hyperlink || null, all_day: allDay, event_type: eventType, color },
+          { title, description, hyperlink: hyperlink || null, all_day: allDay, event_type: eventType, color: resolvedColor },
         );
 
         const { error: rpcError } = await supabase
@@ -375,7 +363,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
               end_date: endDateTime,
               all_day: allDay,
               event_type: eventType,
-              color,
+              color: resolvedColor,
               recurrence_rule: recurrenceRule,
               recurrence_end_date: recurrenceEndDate
                 ? new Date(recurrenceEndDate + 'T23:59:59').toISOString()
@@ -430,8 +418,6 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
       setIsRecurring(false);
       setRecurrenceRule('daily');
       setRecurrenceEndDate('');
-      const defaultColor = eventTypeColors.find(etc => etc.event_type === 'Event')?.color || DEFAULT_EVENT_COLOR;
-      setColor(defaultColor);
       setError('');
       setSubmissionBlocked(false);
     }
@@ -466,8 +452,6 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
       setLoading(false);
     }
   };
-
-  const selectedColorName = PRESET_COLORS.find(c => c.value === color)?.name ?? '';
 
   const isCreateMode = !selectedEvent;
   const canAddAnother = isCreateMode && !!onSaveAndAddAnother;
@@ -730,62 +714,38 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
               )}
             </div>
 
-            {/* ===== Section: Appearance ===== */}
-            <SectionHeader icon={Palette} title="Appearance" />
-            <div className="space-y-5">
-              <div>
-                <label className="block text-sm font-semibold text-amber-900 mb-2.5 flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                  Event Type
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {EVENT_TYPES.map(type => {
-                    const typeColor = eventTypeColors.find(etc => etc.event_type === type)?.color;
-                    const isSelected = eventType === type;
-                    return (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => handleEventTypeChange(type)}
-                        className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 transform active:scale-95 touch-manipulation border-2 ${
-                          isSelected
-                            ? 'bg-amber-400 text-white border-amber-400 shadow-md'
-                            : 'bg-white/80 text-amber-800 border-amber-200 hover:border-amber-300 hover:bg-amber-50/60'
-                        }`}
-                      >
-                        {typeColor && (
-                          <span
-                            className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle"
-                            style={{ backgroundColor: typeColor }}
-                          />
-                        )}
-                        {type}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-amber-900 mb-2.5 sm:mb-3 flex items-center gap-2">
-                  <Palette className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                  Color {selectedColorName && <span className="text-amber-400 font-normal">-- {selectedColorName}</span>}
-                </label>
-                <div className="flex flex-wrap gap-2 sm:gap-3">
-                  {PRESET_COLORS.map(c => (
+            {/* ===== Section: Type ===== */}
+            <SectionHeader icon={Tag} title="Type" />
+            <div>
+              <label className="block text-sm font-semibold text-amber-900 mb-2.5 flex items-center gap-2">
+                <Tag className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                Event Type
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {EVENT_TYPES.map(type => {
+                  const typeColor = eventTypeColors.find(etc => etc.event_type === type)?.color;
+                  const isSelected = eventType === type;
+                  return (
                     <button
-                      key={c.value}
+                      key={type}
                       type="button"
-                      onClick={() => setColor(c.value)}
-                      className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl transition-all duration-200 transform active:scale-95 sm:hover:scale-110 shadow-md active:shadow-lg sm:hover:shadow-lg flex-shrink-0 ${
-                        color === c.value ? 'ring-4 ring-amber-400 ring-offset-2' : 'sm:hover:ring-2 sm:hover:ring-amber-300 sm:hover:ring-offset-1'
+                      onClick={() => handleEventTypeChange(type)}
+                      className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 transform active:scale-95 touch-manipulation border-2 ${
+                        isSelected
+                          ? 'bg-amber-400 text-white border-amber-400 shadow-md'
+                          : 'bg-white/80 text-amber-800 border-amber-200 hover:border-amber-300 hover:bg-amber-50/60'
                       }`}
-                      style={{ backgroundColor: c.value }}
-                      title={c.name}
-                      aria-label={c.name}
-                    />
-                  ))}
-                </div>
+                    >
+                      {typeColor && (
+                        <span
+                          className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle"
+                          style={{ backgroundColor: typeColor }}
+                        />
+                      )}
+                      {type}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
