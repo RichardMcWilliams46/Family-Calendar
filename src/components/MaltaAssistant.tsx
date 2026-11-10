@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { MapPin, ExternalLink, Plus, RefreshCw, Music, Theater, Calendar, Star, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 
@@ -39,7 +39,7 @@ function formatEventDate(dateStr: string | null): string {
   if (!dateStr) return '';
   try {
     const d = new Date(dateStr + 'T12:00:00');
-    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    return d.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
   } catch {
     return dateStr;
   }
@@ -136,12 +136,15 @@ export default function MaltaAssistant({ onAddToCalendar }: Props) {
     setEvents(prev => prev.map(e => e.id === id ? { ...e, added_to_calendar: true } : e));
   };
 
-  const filtered = filter === 'all' ? events : events.filter(e => e.category === filter);
+  const filtered = useMemo(() => filter === 'all' ? events : events.filter(e => e.category === filter), [events, filter]);
   const categories = ['all', 'concert', 'theatre', 'festival', 'event'] as const;
-  const categoryCounts = categories.reduce((acc, cat) => {
-    acc[cat] = cat === 'all' ? events.length : events.filter(e => e.category === cat).length;
-    return acc;
-  }, {} as Record<string, number>);
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: events.length, concert: 0, theatre: 0, festival: 0, event: 0 };
+    for (const e of events) {
+      if (counts[e.category] !== undefined) counts[e.category]++;
+    }
+    return counts;
+  }, [events]);
 
   return (
     <div>

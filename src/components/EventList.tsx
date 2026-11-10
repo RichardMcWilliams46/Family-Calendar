@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { CalendarEvent } from '../lib/supabase';
 import { Calendar, Clock, Tag, ExternalLink } from 'lucide-react';
 import { formatHumanDate, formatHumanTime, isMultiDay } from '../lib/date-utils';
@@ -10,28 +11,29 @@ interface EventListProps {
   onFilterChange: (filter: 'all' | 'events-holidays') => void;
 }
 
-const isHolidayOrEvent = (eventType: string) =>
-  eventType === 'Holiday' || eventType === 'Event';
-
 export default function EventList({ events, onEventClick, currentDate, filterType, onFilterChange }: EventListProps) {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
-  const monthEvents = events.filter(event => {
-    const start = new Date(event.start_date);
-    const end = new Date(event.end_date);
+  const { filteredEvents, filteredCount } = useMemo(() => {
     const monthStart = new Date(year, month, 1);
     const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
-    return start <= monthEnd && end >= monthStart;
-  });
 
-  const filteredEvents = filterType === 'events-holidays'
-    ? monthEvents.filter(e => e.event_type === 'Event' || e.event_type === 'Holiday')
-    : monthEvents;
+    const monthEvents = events.filter(event => {
+      const start = new Date(event.start_date);
+      const end = new Date(event.end_date);
+      return start <= monthEnd && end >= monthStart;
+    });
 
-  const filteredCount = filterType === 'events-holidays'
-    ? monthEvents.filter(e => e.event_type === 'Event' || e.event_type === 'Holiday').length
-    : monthEvents.length;
+    const isHolidayOrEvent = (eventType: string) =>
+      eventType === 'Holiday' || eventType === 'Event';
+
+    if (filterType === 'events-holidays') {
+      const filtered = monthEvents.filter(e => isHolidayOrEvent(e.event_type));
+      return { filteredEvents: filtered, filteredCount: filtered.length };
+    }
+    return { filteredEvents: monthEvents, filteredCount: monthEvents.length };
+  }, [events, year, month, filterType]);
 
   return (
     <div>
@@ -126,7 +128,7 @@ export default function EventList({ events, onEventClick, currentDate, filterTyp
                           <span>{formatHumanTime(event.start_date)} - {formatHumanTime(event.end_date)}</span>
                         </div>
                       )}
-                      {!(filterType === 'events-holidays' && isHolidayOrEvent(event.event_type)) && (
+                      {!(filterType === 'events-holidays' && (event.event_type === 'Holiday' || event.event_type === 'Event')) && (
                         <div className="flex items-center gap-1.5">
                           <Tag className="w-3.5 h-3.5 text-amber-500" />
                           <span>{event.event_type}</span>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase, CalendarEvent, EventTypeColor } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -15,6 +15,42 @@ const MONTHS = [
 ];
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+type RealtimePayload = {
+  eventType: string;
+  new: CalendarEvent;
+  old: { id: string };
+};
+
+function MonthNav({
+  label,
+  onPrev,
+  onNext,
+}: {
+  label: string;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between mb-5">
+      <button
+        onClick={onPrev}
+        className="flex items-center gap-1 px-3 py-2 text-amber-700 hover:bg-amber-100/60 rounded-lg transition-colors text-sm font-medium"
+      >
+        <ChevronLeft className="w-5 h-5" />
+        <span className="hidden sm:inline">Previous</span>
+      </button>
+      <h2 className="text-lg sm:text-xl font-bold text-amber-900">{label}</h2>
+      <button
+        onClick={onNext}
+        className="flex items-center gap-1 px-3 py-2 text-amber-700 hover:bg-amber-100/60 rounded-lg transition-colors text-sm font-medium"
+      >
+        <span className="hidden sm:inline">Next</span>
+        <ChevronRight className="w-5 h-5" />
+      </button>
+    </div>
+  );
+}
+
 export default function Calendar({ user }: { user: User }) {
   const [activeTab, setActiveTab] = useState<TabId>('list');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -25,53 +61,32 @@ export default function Calendar({ user }: { user: User }) {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'events-holidays'>('events-holidays');
   const [loadError, setLoadError] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
-  useEffect(() => {
-    loadEvents();
-    loadEventTypeColors();
+  const loadEvents = useCallback(async (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const rangeStart = new Date(year, month - 1, 1).toISOString();
+    const rangeEnd = new Date(year, month + 2, 0, 23, 59, 59).toISOString();
 
-    const eventsSubscription = supabase
-      .channel('calendar_events_changes')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'calendar_events' },
-        () => { loadEvents(); }
-      )
-      .subscribe();
-
-    const colorsSubscription = supabase
-      .channel('event_type_colors_changes')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'event_type_colors' },
-        () => {
-          loadEventTypeColors();
-          loadEvents();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      eventsSubscription.unsubscribe();
-      colorsSubscription.unsubscribe();
-    };
-  }, []);
-
-  const loadEvents = async () => {
     const { data, error } = await supabase
       .from('calendar_events')
       .select('*')
+      .gte('start_date', rangeStart)
+      .lte('start_date', rangeEnd)
       .order('start_date', { ascending: true });
+
     if (error) {
       setLoadError(true);
       return;
     }
 
-    if (data) {
-      setEvents(data);
-      setLoadError(false);
-    }
-  };
+    setEvents(data ?? []);
+    setLoadError(false);
+    setInitialLoading(false);
+  }, []);
 
-  const loadEventTypeColors = async () => {
+  const loadEventTypeColors = useCallback(async () => {
     const { data, error } = await supabase
       .from('event_type_colors')
       .select('*')
@@ -80,9 +95,56 @@ export default function Calendar({ user }: { user: User }) {
       setLoadError(true);
       return;
     }
-
     if (data) setEventTypeColors(data);
-  };
+  }, []);
+
+  // Load events whenever the visible month changes
+  useEffect(() => {
+    loadEvents(currentDate);
+  }, [currentDate, loadEvents]);
+
+  useEffect(() => {
+    loadEventTypeColors();
+
+    const eventsSubscription = supabase
+      .channel('calendar_events_changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'calendar_events' },
+        (payload) => {
+          const p = payload as unknown as RealtimePayload;
+          setEvents(prev => {
+            if (p.eventType === 'DELETE') {
+              return prev.filter(e => e.id !== p.old.id);
+            }
+            if (p.eventType === 'INSERT') {
+              const exists = prev.some(e => e.id === p.new.id);
+              if (exists) return prev;
+              const merged = [...prev, p.new];
+              merged.sort((a, b) => a.start_date.localeCompare(b.start_date));
+              return merged;
+            }
+            if (p.eventType === 'UPDATE') {
+              return prev.map(e => e.id === p.new.id ? p.new : e);
+            }
+            return prev;
+          });
+        }
+      )
+      .subscribe();
+
+    const colorsSubscription = supabase
+      .channel('event_type_colors_changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'event_type_colors' },
+        () => { loadEventTypeColors(); }
+      )
+      .subscribe();
+
+    return () => {
+      eventsSubscription.unsubscribe();
+      colorsSubscription.unsubscribe();
+    };
+  }, [loadEventTypeColors]);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -99,12 +161,24 @@ export default function Calendar({ user }: { user: User }) {
     return days;
   };
 
+  // Build a date-to-events lookup map once per render cycle
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    const days = getDaysInMonth(currentDate);
+    for (const day of days) {
+      if (!day) continue;
+      const dateKey = toCalendarDate(day);
+      const dayEvents = events.filter(event =>
+        isDateInRange(dateKey, event.start_date, event.end_date),
+      );
+      map.set(dateKey, dayEvents);
+    }
+    return map;
+  }, [events, currentDate]);
+
   const getEventsForDate = (date: Date | null) => {
     if (!date) return [];
-    const dateKey = toCalendarDate(date);
-    return events.filter(event =>
-      isDateInRange(dateKey, event.start_date, event.end_date),
-    );
+    return eventsByDate.get(toCalendarDate(date)) ?? [];
   };
 
   const handlePreviousMonth = () =>
@@ -134,9 +208,11 @@ export default function Calendar({ user }: { user: User }) {
     setIsModalOpen(true);
   };
 
+  const todayString = useMemo(() => new Date().toDateString(), []);
+
   const isToday = (date: Date | null) => {
     if (!date) return false;
-    return date.toDateString() === new Date().toDateString();
+    return date.toDateString() === todayString;
   };
 
   const days = getDaysInMonth(currentDate);
@@ -157,7 +233,7 @@ export default function Calendar({ user }: { user: User }) {
           <button
             type="button"
             onClick={() => {
-              loadEvents();
+              loadEvents(currentDate);
               loadEventTypeColors();
             }}
             className="font-semibold underline underline-offset-2"
@@ -170,112 +246,82 @@ export default function Calendar({ user }: { user: User }) {
       {/* ===== Calendar Grid Tab ===== */}
       {activeTab === 'calendar' && (
         <div>
-          {/* Month navigation */}
-          <div className="flex items-center justify-between mb-5">
-            <button
-              onClick={handlePreviousMonth}
-              className="flex items-center gap-1 px-3 py-2 text-amber-700 hover:bg-amber-100/60 rounded-lg transition-colors text-sm font-medium"
-            >
-              <ChevronLeft className="w-5 h-5" />
-              <span className="hidden sm:inline">Previous</span>
-            </button>
-            <h2 className="text-lg sm:text-xl font-bold text-amber-900">{monthLabel}</h2>
-            <button
-              onClick={handleNextMonth}
-              className="flex items-center gap-1 px-3 py-2 text-amber-700 hover:bg-amber-100/60 rounded-lg transition-colors text-sm font-medium"
-            >
-              <span className="hidden sm:inline">Next</span>
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
+          <MonthNav label={monthLabel} onPrev={handlePreviousMonth} onNext={handleNextMonth} />
 
-          {/* Calendar grid */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-amber-200/50 shadow-sm overflow-hidden">
-            <div className="grid grid-cols-7 gap-px bg-amber-200/40">
-              {DAYS.map(day => (
-                <div key={day} className="bg-amber-50/80 text-center font-semibold text-amber-800 py-2.5 text-xs uppercase tracking-wider">
-                  <span className="hidden sm:inline">{day}</span>
-                  <span className="sm:hidden">{day.charAt(0)}</span>
-                </div>
-              ))}
+          {initialLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="w-10 h-10 border-[3px] border-amber-200 border-t-amber-400 rounded-full animate-spin" />
             </div>
-
-            <div className="grid grid-cols-7 gap-px bg-amber-200/40">
-              {days.map((day, index) => {
-                const dayEvents = getEventsForDate(day);
-                const isWeekend = day && (day.getDay() === 0 || day.getDay() === 6);
-                return (
-                  <div
-                    key={index}
-                    onClick={() => handleDateClick(day)}
-                    className={`min-h-[80px] sm:min-h-[110px] lg:min-h-[120px] p-1.5 sm:p-2 transition-all ${
-                      day
-                        ? isToday(day)
-                          ? 'bg-amber-100/60 cursor-pointer hover:bg-amber-100'
-                          : isWeekend
-                          ? 'bg-yellow-50/50 cursor-pointer hover:bg-yellow-100/60'
-                          : 'bg-white/80 cursor-pointer hover:bg-amber-50/40'
-                        : 'bg-amber-50/20 cursor-default'
-                    }`}
-                  >
-                    {day && (
-                      <>
-                        <div className={`text-xs sm:text-sm font-medium mb-1 flex items-center justify-center w-6 h-6 rounded-full ${
-                          isToday(day)
-                            ? 'bg-gradient-to-br from-amber-400 to-yellow-500 text-white shadow-sm'
-                            : 'text-amber-900'
-                        }`}>
-                          {day.getDate()}
-                        </div>
-                        <div className="space-y-0.5 sm:space-y-1">
-                          {dayEvents.slice(0, 2).map(event => (
-                            <div
-                              key={event.id}
-                              onClick={(e) => handleEventClick(event, e)}
-                              className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded truncate hover:opacity-80 transition-opacity font-medium shadow-sm"
-                              style={{ backgroundColor: event.color, color: 'white' }}
-                            >
-                              {event.title}
-                            </div>
-                          ))}
-                          {dayEvents.length > 2 && (
-                            <div className="text-[10px] sm:text-xs text-amber-600 px-1.5 sm:px-2 font-medium">
-                              +{dayEvents.length - 2}
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
+          ) : (
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-amber-200/50 shadow-sm overflow-hidden">
+              <div className="grid grid-cols-7 gap-px bg-amber-200/40">
+                {DAYS.map(day => (
+                  <div key={day} className="bg-amber-50/80 text-center font-semibold text-amber-800 py-2.5 text-xs uppercase tracking-wider">
+                    <span className="hidden sm:inline">{day}</span>
+                    <span className="sm:hidden">{day.charAt(0)}</span>
                   </div>
-                );
-              })}
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-px bg-amber-200/40">
+                {days.map((day, index) => {
+                  const dayEvents = getEventsForDate(day);
+                  const isWeekend = day && (day.getDay() === 0 || day.getDay() === 6);
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => handleDateClick(day)}
+                      className={`min-h-[80px] sm:min-h-[110px] lg:min-h-[120px] p-1.5 sm:p-2 transition-all ${
+                        day
+                          ? isToday(day)
+                            ? 'bg-amber-100/60 cursor-pointer hover:bg-amber-100'
+                            : isWeekend
+                            ? 'bg-yellow-50/50 cursor-pointer hover:bg-yellow-100/60'
+                            : 'bg-white/80 cursor-pointer hover:bg-amber-50/40'
+                          : 'bg-amber-50/20 cursor-default'
+                      }`}
+                    >
+                      {day && (
+                        <>
+                          <div className={`text-xs sm:text-sm font-medium mb-1 flex items-center justify-center w-6 h-6 rounded-full ${
+                            isToday(day)
+                              ? 'bg-gradient-to-br from-amber-400 to-yellow-500 text-white shadow-sm'
+                              : 'text-amber-900'
+                          }`}>
+                            {day.getDate()}
+                          </div>
+                          <div className="space-y-0.5 sm:space-y-1">
+                            {dayEvents.slice(0, 2).map(event => (
+                              <div
+                                key={event.id}
+                                onClick={(e) => handleEventClick(event, e)}
+                                className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded truncate hover:opacity-80 transition-opacity font-medium shadow-sm"
+                                style={{ backgroundColor: event.color, color: 'white' }}
+                              >
+                                {event.title}
+                              </div>
+                            ))}
+                            {dayEvents.length > 2 && (
+                              <div className="text-[10px] sm:text-xs text-amber-600 px-1.5 sm:px-2 font-medium">
+                                +{dayEvents.length - 2}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
       {/* ===== List Tab ===== */}
       {activeTab === 'list' && (
         <div>
-          {/* Month navigation */}
-          <div className="flex items-center justify-between mb-5">
-            <button
-              onClick={handlePreviousMonth}
-              className="flex items-center gap-1 px-3 py-2 text-amber-700 hover:bg-amber-100/60 rounded-lg transition-colors text-sm font-medium"
-            >
-              <ChevronLeft className="w-5 h-5" />
-              <span className="hidden sm:inline">Previous</span>
-            </button>
-            <h2 className="text-lg sm:text-xl font-bold text-amber-900">{monthLabel}</h2>
-            <button
-              onClick={handleNextMonth}
-              className="flex items-center gap-1 px-3 py-2 text-amber-700 hover:bg-amber-100/60 rounded-lg transition-colors text-sm font-medium"
-            >
-              <span className="hidden sm:inline">Next</span>
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-
+          <MonthNav label={monthLabel} onPrev={handlePreviousMonth} onNext={handleNextMonth} />
           <EventList
             events={events}
             currentDate={currentDate}
@@ -312,7 +358,7 @@ export default function Calendar({ user }: { user: User }) {
           user={user}
           onColorsSaved={() => {
             loadEventTypeColors();
-            loadEvents();
+            loadEvents(currentDate);
           }}
         />
       )}
@@ -328,7 +374,7 @@ export default function Calendar({ user }: { user: User }) {
             setSelectedDate(null);
             setSelectedEvent(null);
           }}
-          onSave={loadEvents}
+          onSave={() => loadEvents(currentDate)}
         />
       )}
     </AppShell>

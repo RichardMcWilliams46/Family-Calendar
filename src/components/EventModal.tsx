@@ -4,6 +4,59 @@ import { DEFAULT_EVENT_COLOR, EVENT_TYPES, PRESET_COLORS } from '../lib/event-co
 import { toDateInputValue, toTimeInputValue, advanceRecurrence } from '../lib/date-utils';
 import { X, Calendar, Clock, Tag, Palette, Trash2, Repeat, Link, FileText, CalendarClock, AlertCircle } from 'lucide-react';
 
+interface OccurrenceRow {
+  title: string;
+  description: string;
+  hyperlink: string | null;
+  start_date: string;
+  end_date: string;
+  all_day: boolean;
+  event_type: string;
+  color: string;
+  is_recurring: boolean;
+  parent_event_id: string | null;
+}
+
+function buildOccurrences(
+  startISO: string,
+  endISO: string,
+  rule: string,
+  recEndDateStr: string,
+  fields: { title: string; description: string; hyperlink: string | null; all_day: boolean; event_type: string; color: string },
+): OccurrenceRow[] {
+  const recurrences: OccurrenceRow[] = [];
+  const start = new Date(startISO);
+  const end = new Date(endISO);
+  const recEndDate = recEndDateStr
+    ? new Date(recEndDateStr + 'T23:59:59')
+    : new Date(start.getTime() + 365 * 24 * 60 * 60 * 1000);
+
+  const duration = end.getTime() - start.getTime();
+  const MAX_RECURRENCES = 366;
+  let current = new Date(start);
+
+  while (current <= recEndDate && recurrences.length < MAX_RECURRENCES) {
+    current = advanceRecurrence(current, rule as 'daily' | 'weekly' | 'monthly' | 'yearly');
+
+    if (current <= recEndDate) {
+      recurrences.push({
+        title: fields.title,
+        description: fields.description,
+        hyperlink: fields.hyperlink,
+        start_date: current.toISOString(),
+        end_date: new Date(current.getTime() + duration).toISOString(),
+        all_day: fields.all_day,
+        event_type: fields.event_type,
+        color: fields.color,
+        is_recurring: false,
+        parent_event_id: null,
+      });
+    }
+  }
+
+  return recurrences;
+}
+
 interface EventModalProps {
   selectedDate: Date | null;
   selectedEvent: CalendarEvent | null;
@@ -61,14 +114,32 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
       setRecurrenceRule(selectedEvent.recurrence_rule || 'daily');
       if (selectedEvent.recurrence_end_date) {
         setRecurrenceEndDate(toDateInputValue(new Date(selectedEvent.recurrence_end_date)));
+      } else {
+        setRecurrenceEndDate('');
       }
-    } else if (selectedDate) {
-      const dateStr = toDateInputValue(selectedDate);
-      setStartDate(dateStr);
-      setEndDate(dateStr);
+    } else {
+      setTitle('');
+      setDescription('');
+      setHyperlink('');
+      setStartTime('09:00');
+      setEndTime('10:00');
+      setAllDay(false);
+      setEventType('Event');
+      setIsRecurring(false);
+      setRecurrenceRule('daily');
+      setRecurrenceEndDate('');
 
-      const defaultColor = eventTypeColors.find(etc => etc.event_type === 'Event')?.color || DEFAULT_EVENT_COLOR;
-      setColor(defaultColor);
+      if (selectedDate) {
+        const dateStr = toDateInputValue(selectedDate);
+        setStartDate(dateStr);
+        setEndDate(dateStr);
+        const defaultColor = eventTypeColors.find(etc => etc.event_type === 'Event')?.color || DEFAULT_EVENT_COLOR;
+        setColor(defaultColor);
+      } else {
+        setStartDate('');
+        setEndDate('');
+        setColor(DEFAULT_EVENT_COLOR);
+      }
     }
   }, [selectedEvent, selectedDate, eventTypeColors]);
 
@@ -197,8 +268,8 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
               recurrence_end_date: recurrenceEndDate
                 ? new Date(recurrenceEndDate + 'T23:59:59').toISOString()
                 : null,
-            } as unknown as Record<string, unknown>,
-            p_occurrences: occurrences as unknown as unknown[],
+            },
+            p_occurrences: occurrences,
           });
 
         if (rpcError) throw rpcError;
@@ -217,46 +288,6 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
     } finally {
       setLoading(false);
     }
-  };
-
-  const buildOccurrences = (
-    startISO: string,
-    endISO: string,
-    rule: string,
-    recEndDateStr: string,
-    fields: { title: string; description: string; hyperlink: string | null; all_day: boolean; event_type: string; color: string },
-  ): Record<string, string | boolean | null>[] => {
-    const recurrences: Record<string, string | boolean | null>[] = [];
-    const start = new Date(startISO);
-    const end = new Date(endISO);
-    const recEndDate = recEndDateStr
-      ? new Date(recEndDateStr + 'T23:59:59')
-      : new Date(start.getTime() + 365 * 24 * 60 * 60 * 1000);
-
-    const duration = end.getTime() - start.getTime();
-    const MAX_RECURRENCES = 366;
-    let current = new Date(start);
-
-    while (current <= recEndDate && recurrences.length < MAX_RECURRENCES) {
-      current = advanceRecurrence(current, rule as 'daily' | 'weekly' | 'monthly' | 'yearly');
-
-      if (current <= recEndDate) {
-        recurrences.push({
-          title: fields.title,
-          description: fields.description,
-          hyperlink: fields.hyperlink,
-          start_date: current.toISOString(),
-          end_date: new Date(current.getTime() + duration).toISOString(),
-          all_day: fields.all_day,
-          event_type: fields.event_type,
-          color: fields.color,
-          is_recurring: false,
-          parent_event_id: null,
-        });
-      }
-    }
-
-    return recurrences;
   };
 
   const handleDelete = async () => {
