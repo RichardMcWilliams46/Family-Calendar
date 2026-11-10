@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, CalendarEvent, EventTypeColor } from '../lib/supabase';
 import { DEFAULT_EVENT_COLOR, EVENT_TYPES, PRESET_COLORS } from '../lib/event-config';
 import { toDateInputValue, toTimeInputValue, advanceRecurrence } from '../lib/date-utils';
-import { X, Calendar, Clock, Tag, Palette, Trash2, Repeat, Link, FileText, CalendarClock, AlertCircle } from 'lucide-react';
+import { X, Calendar, Clock, Tag, Palette, Trash2, Repeat, Link, FileText, CalendarClock, AlertCircle, Plus } from 'lucide-react';
 
 interface OccurrenceRow {
   title: string;
@@ -63,6 +63,7 @@ interface EventModalProps {
   eventTypeColors: EventTypeColor[];
   onClose: () => void;
   onSave: () => void;
+  onSaveAndAddAnother?: () => void;
 }
 
 function SectionHeader({ icon: Icon, title }: { icon: typeof Calendar; title: string }) {
@@ -75,7 +76,14 @@ function SectionHeader({ icon: Icon, title }: { icon: typeof Calendar; title: st
   );
 }
 
-export default function EventModal({ selectedDate, selectedEvent, eventTypeColors, onClose, onSave }: EventModalProps) {
+/** Add one hour to a "HH:MM" time string, wrapping past midnight. */
+function addHour(timeStr: string): string {
+  const [h, m] = timeStr.split(':').map(Number);
+  const newH = (h + 1) % 24;
+  return `${String(newH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+export default function EventModal({ selectedDate, selectedEvent, eventTypeColors, onClose, onSave, onSaveAndAddAnother }: EventModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [hyperlink, setHyperlink] = useState('');
@@ -93,6 +101,21 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [submissionBlocked, setSubmissionBlocked] = useState(false);
+
+
+  // Track original recurrence values to detect changes when editing
+  const originalRecurrence = useRef<{ isRecurring: boolean; rule: string; endDate: string } | null>(null);
+
+  // ===== Track whether recurrence settings changed from the original event =====
+  const recurrenceWasModified = useMemo(() => {
+    if (!selectedEvent || !originalRecurrence.current) return false;
+    const orig = originalRecurrence.current;
+    return (
+      orig.isRecurring !== isRecurring ||
+      orig.rule !== recurrenceRule ||
+      orig.endDate !== recurrenceEndDate
+    );
+  }, [selectedEvent, isRecurring, recurrenceRule, recurrenceEndDate]);
 
   useEffect(() => {
     if (selectedEvent) {
@@ -112,11 +135,17 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
       setColor(selectedEvent.color);
       setIsRecurring(selectedEvent.is_recurring);
       setRecurrenceRule(selectedEvent.recurrence_rule || 'daily');
-      if (selectedEvent.recurrence_end_date) {
-        setRecurrenceEndDate(toDateInputValue(new Date(selectedEvent.recurrence_end_date)));
-      } else {
-        setRecurrenceEndDate('');
-      }
+      const recEnd = selectedEvent.recurrence_end_date
+        ? toDateInputValue(new Date(selectedEvent.recurrence_end_date))
+        : '';
+      setRecurrenceEndDate(recEnd);
+
+      originalRecurrence.current = {
+        isRecurring: selectedEvent.is_recurring,
+        rule: selectedEvent.recurrence_rule || 'daily',
+        endDate: recEnd,
+      };
+
     } else {
       setTitle('');
       setDescription('');
@@ -128,6 +157,10 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
       setIsRecurring(false);
       setRecurrenceRule('daily');
       setRecurrenceEndDate('');
+
+      originalRecurrence.current = null;
+
+
 
       if (selectedDate) {
         const dateStr = toDateInputValue(selectedDate);
@@ -202,12 +235,44 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
     return `${prefix} until ${endDateText} -- ${count} occurrence${count !== 1 ? 's' : ''} will be created`;
   }, [isRecurring, recurrenceRule, recurrenceEndDate, startDate]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // ===== Handlers with auto-fill logic =====
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+    if (endDate && value > endDate) {
+      setEndDate(value);
+    }
+  };
 
+  const handleStartTimeChange = (value: string) => {
+    setStartTime(value);
+    // Auto-advance end time to 1 hour after start, but only if end time
+    // is currently equal to or before the new start time.
+    setEndTime(prevEnd => {
+      if (prevEnd <= value) return addHour(value);
+      return prevEnd;
+    });
+  };
+
+  const handleEventTypeChange = (type: string) => {
+    setEventType(type);
+  };
+
+  const handleRecurringToggle = (checked: boolean) => {
+    setIsRecurring(checked);
+  };
+
+  const handleRecurrenceRuleChange = (rule: string) => {
+    setRecurrenceRule(rule);
+  };
+
+  const handleRecurrenceEndDateChange = (date: string) => {
+    setRecurrenceEndDate(date);
+  };
+
+  const performSave = async (): Promise<boolean> => {
     if (hasValidationErrors) {
       setSubmissionBlocked(true);
-      return;
+      return false;
     }
 
     setLoading(true);
@@ -238,12 +303,59 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
       };
 
       if (selectedEvent) {
+        // If recurrence settings changed on an existing recurring event,
+        // delete all child occurrences and regenerate them.
+        if (recurrenceWasModified && isRecurring) {
+          await supabase
+            .from('calendar_events')
+            .delete()
+            .eq('parent_event_id', selectedEvent.id);
+
+          const occurrences = buildOccurrences(
+            startDateTime,
+            endDateTime,
+            recurrenceRule,
+            recurrenceEndDate,
+            { title, description, hyperlink: hyperlink || null, all_day: allDay, event_type: eventType, color },
+          );
+
+          const { error: rpcError } = await supabase
+            .rpc('create_recurring_event', {
+              p_payload: {
+                title,
+                description,
+                hyperlink: hyperlink || null,
+                start_date: startDateTime,
+                end_date: endDateTime,
+                all_day: allDay,
+                event_type: eventType,
+                color,
+                recurrence_rule: recurrenceRule,
+                recurrence_end_date: recurrenceEndDate
+                  ? new Date(recurrenceEndDate + 'T23:59:59').toISOString()
+                  : null,
+              },
+              p_occurrences: occurrences,
+            });
+
+          if (rpcError) throw rpcError;
+        }
+
+        // Update the parent event itself
         const { error } = await supabase
           .from('calendar_events')
           .update(eventData)
           .eq('id', selectedEvent.id);
 
         if (error) throw error;
+
+        // If turning off recurrence, delete all children
+        if (recurrenceWasModified && !isRecurring && originalRecurrence.current?.isRecurring) {
+          await supabase
+            .from('calendar_events')
+            .delete()
+            .eq('parent_event_id', selectedEvent.id);
+        }
       } else if (isRecurring) {
         const occurrences = buildOccurrences(
           startDateTime,
@@ -281,12 +393,47 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
         if (insertError) throw insertError;
       }
 
-      onSave();
-      onClose();
+      return true;
     } catch {
       setError('Could not save this event. Please try again.');
+      return false;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const success = await performSave();
+    if (success) {
+      onSave();
+      onClose();
+    }
+  };
+
+  const handleSaveAndAddAnother = async () => {
+    if (!title.trim()) {
+      setSubmissionBlocked(true);
+      return;
+    }
+    const success = await performSave();
+    if (success) {
+      onSave();
+      // Reset form for next entry, keeping the same date
+      setTitle('');
+      setDescription('');
+      setHyperlink('');
+      setStartTime('09:00');
+      setEndTime('10:00');
+      setAllDay(false);
+      setEventType('Event');
+      setIsRecurring(false);
+      setRecurrenceRule('daily');
+      setRecurrenceEndDate('');
+      const defaultColor = eventTypeColors.find(etc => etc.event_type === 'Event')?.color || DEFAULT_EVENT_COLOR;
+      setColor(defaultColor);
+      setError('');
+      setSubmissionBlocked(false);
     }
   };
 
@@ -296,6 +443,14 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
     setLoading(true);
     setConfirmDelete(false);
     try {
+      // Delete child occurrences too if this is a recurring parent
+      if (selectedEvent.is_recurring) {
+        await supabase
+          .from('calendar_events')
+          .delete()
+          .eq('parent_event_id', selectedEvent.id);
+      }
+
       const { error } = await supabase
         .from('calendar_events')
         .delete()
@@ -312,9 +467,10 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
     }
   };
 
-
   const selectedColorName = PRESET_COLORS.find(c => c.value === color)?.name ?? '';
 
+  const isCreateMode = !selectedEvent;
+  const canAddAnother = isCreateMode && !!onSaveAndAddAnother;
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 animate-fadeIn px-0">
@@ -413,12 +569,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
                     id="startDate"
                     type="date"
                     value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      if (endDate && e.target.value > endDate) {
-                        setEndDate(e.target.value);
-                      }
-                    }}
+                    onChange={(e) => handleStartDateChange(e.target.value)}
                     required
                     style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
                     className="block px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
@@ -435,7 +586,7 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
                       id="startTime"
                       type="time"
                       value={startTime}
-                      onChange={(e) => setStartTime(e.target.value)}
+                      onChange={(e) => handleStartTimeChange(e.target.value)}
                       required
                       style={{width: '100%', maxWidth: '100%', boxSizing: 'border-box'}}
                       className="block px-2.5 py-2.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 text-sm"
@@ -495,102 +646,124 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
             </div>
 
             {/* ===== Section: Repeats ===== */}
-            {!selectedEvent && (
-              <>
-                <SectionHeader icon={Repeat} title="Repeats" />
+            <SectionHeader icon={Repeat} title="Repeats" />
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 bg-gradient-to-r from-yellow-100/50 to-amber-100/50 p-3.5 sm:p-4 rounded-xl border border-amber-200/50">
+                <input
+                  id="isRecurring"
+                  type="checkbox"
+                  checked={isRecurring}
+                  onChange={(e) => handleRecurringToggle(e.target.checked)}
+                  className="w-5 h-5 text-amber-600 border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 flex-shrink-0"
+                />
+                <label htmlFor="isRecurring" className="text-sm font-semibold text-amber-900 flex items-center gap-2 cursor-pointer select-none">
+                  <Repeat className="w-4 h-4 flex-shrink-0" />
+                  Recurring event
+                </label>
+              </div>
+
+              {isRecurring && (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3 bg-gradient-to-r from-yellow-100/50 to-amber-100/50 p-3.5 sm:p-4 rounded-xl border border-amber-200/50">
-                    <input
-                      id="isRecurring"
-                      type="checkbox"
-                      checked={isRecurring}
-                      onChange={(e) => setIsRecurring(e.target.checked)}
-                      className="w-5 h-5 text-amber-600 border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 flex-shrink-0"
-                    />
-                    <label htmlFor="isRecurring" className="text-sm font-semibold text-amber-900 flex items-center gap-2 cursor-pointer select-none">
-                      <Repeat className="w-4 h-4 flex-shrink-0" />
-                      Recurring event
-                    </label>
+                  {/* Warning when editing an existing recurring event's pattern */}
+                  {selectedEvent && recurrenceWasModified && (
+                    <div className="flex items-start gap-2 text-xs text-amber-800 font-medium bg-amber-100/80 border border-amber-300 rounded-lg px-3 py-2.5 animate-slideDown">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600 mt-0.5" />
+                      <span>
+                        Changing the recurrence pattern will delete all existing repeated events and create new ones based on the updated schedule.
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 bg-gradient-to-r from-yellow-100/50 to-amber-100/50 p-4 sm:p-5 rounded-xl border border-amber-200/50">
+                    <div>
+                      <label htmlFor="recurrenceRule" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                        <Repeat className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                        Repeat
+                      </label>
+                      <select
+                        id="recurrenceRule"
+                        value={recurrenceRule}
+                        onChange={(e) => handleRecurrenceRuleChange(e.target.value)}
+                        className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition-all duration-200 font-medium text-base"
+                      >
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="recurrenceEndDate" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                        End Repeat
+                      </label>
+                      <input
+                        id="recurrenceEndDate"
+                        type="date"
+                        value={recurrenceEndDate}
+                        onChange={(e) => handleRecurrenceEndDateChange(e.target.value)}
+                        className={`w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none transition-all duration-200 text-base placeholder:text-amber-300 ${
+                          recEndBeforeStart ? 'border-red-400 focus:ring-red-400' : 'border-amber-200 focus:border-amber-400'
+                        }`}
+                        placeholder="Optional"
+                      />
+                    </div>
                   </div>
 
-                  {isRecurring && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 bg-gradient-to-r from-yellow-100/50 to-amber-100/50 p-4 sm:p-5 rounded-xl border border-amber-200/50">
-                        <div>
-                          <label htmlFor="recurrenceRule" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
-                            <Repeat className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                            Repeat
-                          </label>
-                          <select
-                            id="recurrenceRule"
-                            value={recurrenceRule}
-                            onChange={(e) => setRecurrenceRule(e.target.value)}
-                            className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition-all duration-200 font-medium text-base"
-                          >
-                            <option value="daily">Daily</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="monthly">Monthly</option>
-                            <option value="yearly">Yearly</option>
-                          </select>
-                        </div>
+                  {/* Recurrence preview summary */}
+                  {recurrenceSummary && !recEndBeforeStart && (
+                    <div className="flex items-center gap-2 text-xs text-amber-700 font-medium bg-amber-50/80 border border-amber-200/60 rounded-lg px-3 py-2.5 animate-slideDown">
+                      <Repeat className="w-3.5 h-3.5 flex-shrink-0 text-amber-500" />
+                      {recurrenceSummary}
+                    </div>
+                  )}
 
-                        <div>
-                          <label htmlFor="recurrenceEndDate" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                            End Repeat
-                          </label>
-                          <input
-                            id="recurrenceEndDate"
-                            type="date"
-                            value={recurrenceEndDate}
-                            onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                            className={`w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none transition-all duration-200 text-base placeholder:text-amber-300 ${
-                              recEndBeforeStart ? 'border-red-400 focus:ring-red-400' : 'border-amber-200 focus:border-amber-400'
-                            }`}
-                            placeholder="Optional"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Recurrence preview summary */}
-                      {recurrenceSummary && !recEndBeforeStart && (
-                        <div className="flex items-center gap-2 text-xs text-amber-700 font-medium bg-amber-50/80 border border-amber-200/60 rounded-lg px-3 py-2.5 animate-slideDown">
-                          <Repeat className="w-3.5 h-3.5 flex-shrink-0 text-amber-500" />
-                          {recurrenceSummary}
-                        </div>
-                      )}
-
-                      {/* Inline validation: recurrence end before start */}
-                      {recEndBeforeStart && (
-                        <div className="flex items-center gap-2 text-xs text-red-600 font-medium bg-red-50/60 border border-red-200 rounded-lg px-3 py-2 animate-slideDown">
-                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                          Recurrence end date must be after the event start date
-                        </div>
-                      )}
+                  {/* Inline validation: recurrence end before start */}
+                  {recEndBeforeStart && (
+                    <div className="flex items-center gap-2 text-xs text-red-600 font-medium bg-red-50/60 border border-red-200 rounded-lg px-3 py-2 animate-slideDown">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      Recurrence end date must be after the event start date
                     </div>
                   )}
                 </div>
-              </>
-            )}
+              )}
+            </div>
 
             {/* ===== Section: Appearance ===== */}
             <SectionHeader icon={Palette} title="Appearance" />
             <div className="space-y-5">
               <div>
-                <label htmlFor="eventType" className="block text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                <label className="block text-sm font-semibold text-amber-900 mb-2.5 flex items-center gap-2">
                   <Tag className="w-4 h-4 text-amber-600 flex-shrink-0" />
                   Event Type
                 </label>
-                <select
-                  id="eventType"
-                  value={eventType}
-                  onChange={(e) => setEventType(e.target.value)}
-                  className="w-full px-4 py-3 sm:px-5 sm:py-3.5 bg-white/80 border-2 border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white outline-none transition-all duration-200 font-medium text-base"
-                >
-                  {EVENT_TYPES.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
+                <div className="flex flex-wrap gap-2">
+                  {EVENT_TYPES.map(type => {
+                    const typeColor = eventTypeColors.find(etc => etc.event_type === type)?.color;
+                    const isSelected = eventType === type;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => handleEventTypeChange(type)}
+                        className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 transform active:scale-95 touch-manipulation border-2 ${
+                          isSelected
+                            ? 'bg-amber-400 text-white border-amber-400 shadow-md'
+                            : 'bg-white/80 text-amber-800 border-amber-200 hover:border-amber-300 hover:bg-amber-50/60'
+                        }`}
+                      >
+                        {typeColor && (
+                          <span
+                            className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle"
+                            style={{ backgroundColor: typeColor }}
+                          />
+                        )}
+                        {type}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div>
@@ -667,21 +840,34 @@ export default function EventModal({ selectedDate, selectedEvent, eventTypeColor
                 </button>
               )
             )}
-            <div className="flex-1" />
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-6 py-3.5 border-2 border-amber-300 active:bg-amber-50 sm:hover:bg-amber-50 text-amber-900 font-semibold rounded-xl transition-all duration-200 w-full sm:w-auto order-2 sm:order-none touch-manipulation bg-white/50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-3.5 bg-gradient-to-r from-amber-400 to-yellow-500 active:from-amber-500 active:to-yellow-600 sm:hover:from-amber-500 sm:hover:to-yellow-600 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg active:shadow-xl sm:hover:shadow-xl transform active:scale-95 sm:hover:-translate-y-0.5 w-full sm:w-auto order-1 sm:order-none touch-manipulation"
-            >
-              {loading ? 'Saving...' : selectedEvent ? 'Update Event' : 'Create Event'}
-            </button>
+            <div className="hidden sm:block flex-1" />
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-3.5 border-2 border-amber-300 active:bg-amber-50 sm:hover:bg-amber-50 text-amber-900 font-semibold rounded-xl transition-all duration-200 w-full sm:w-auto touch-manipulation bg-white/50 order-3 sm:order-none"
+              >
+                Cancel
+              </button>
+              {canAddAnother && (
+                <button
+                  type="button"
+                  onClick={handleSaveAndAddAnother}
+                  disabled={loading}
+                  className="flex items-center justify-center gap-2 px-6 py-3.5 bg-white/90 border-2 border-amber-400 active:bg-amber-50 sm:hover:bg-amber-50 text-amber-800 font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 shadow-md active:shadow-lg sm:hover:shadow-lg transform active:scale-95 w-full sm:w-auto touch-manipulation order-2 sm:order-none"
+                >
+                  <Plus className="w-5 h-5 flex-shrink-0" />
+                  {loading ? 'Saving...' : 'Save & Add Another'}
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-6 py-3.5 bg-gradient-to-r from-amber-400 to-yellow-500 active:from-amber-500 active:to-yellow-600 sm:hover:from-amber-500 sm:hover:to-yellow-600 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg active:shadow-xl sm:hover:shadow-xl transform active:scale-95 sm:hover:-translate-y-0.5 w-full sm:w-auto touch-manipulation order-1 sm:order-none"
+              >
+                {loading ? 'Saving...' : selectedEvent ? 'Update Event' : 'Create Event'}
+              </button>
+            </div>
           </div>
         </form>
       </div>

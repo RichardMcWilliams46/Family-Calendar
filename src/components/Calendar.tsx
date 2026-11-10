@@ -375,6 +375,7 @@ export default function Calendar({ user }: { user: User }) {
             setSelectedEvent(null);
           }}
           onSave={() => loadEvents(currentDate)}
+          onSaveAndAddAnother={() => loadEvents(currentDate)}
         />
       )}
     </AppShell>
