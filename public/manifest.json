@@ -2,33 +2,33 @@
   "name": "Sunflower Calendar",
   "short_name": "Calendar",
   "description": "A beautiful shared calendar for couples",
-  "start_url": "/Family-Calendar/",
-  "scope": "/Family-Calendar/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#FFFBEB",
   "theme_color": "#F59E0B",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/Family-Calendar/icon-192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/Family-Calendar/icon-192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/Family-Calendar/icon-512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/Family-Calendar/icon-512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
